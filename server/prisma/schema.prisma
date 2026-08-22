@@ -1,7 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Casbah — COD clothing store
+// Money is ALWAYS Int (Algerian dinars, no decimals). Never Float.
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +8,209 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ---------------------------------------------------------------- enums
+
+enum DeliveryType {
+  DESK // pickup at the Yalidine/ZR desk in the wilaya
+  HOME // delivered to the customer's address
+}
+
+enum Carrier {
+  YALIDINE
+  ZR_EXPRESS
+  OTHER // the shop's own courier, or an unspecified one
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  RETURNED
+  CANCELLED
+}
+
+// ------------------------------------------------------------- catalogue
+
+model Category {
+  id   Int    @id @default(autoincrement())
+  name String
+  slug String @unique
+
+  products Product[]
+}
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  name        String
+  slug        String   @unique
+  description String
+  basePrice   Int
+  categoryId  Int?
+  images      String[]
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  // SetNull: shop owners reorganise categories. Deleting one leaves its
+  // products uncategorised rather than blocking the delete until every product
+  // has been moved by hand. Uncategorised is recoverable; blocked is not.
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  variants Variant[]
+
+  // slug is already @unique -> Postgres builds a unique B-tree index for it,
+  // so an explicit @@index([slug]) would just be a duplicate. categoryId is a
+  // FK and Postgres does NOT auto-index FKs, so this one is real work.
+  @@index([categoryId])
+  @@index([active])
+}
+
+model Variant {
+  id            Int    @id @default(autoincrement())
+  productId     Int
+  size          String
+  color         String
+  stock         Int    @default(0)
+  sku           String @unique
+  priceOverride Int?
+
+  // Cascade: a variant is a part of its product, not a standalone thing.
+  // Deleting the product takes its variants with it. This is now a real,
+  // working delete path -- OrderItem.variantId is nullable with SetNull, so
+  // historical order lines survive the cascade on their snapshot columns.
+  product Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  items   OrderItem[]
+
+  // One row per (product, size, color) -- no duplicate "Black / L" variants.
+  // Leads with productId, so it also serves lookups filtered by productId
+  // alone. No separate @@index([productId]) needed.
+  @@unique([productId, size, color])
+}
+
+// ------------------------------------------------------- delivery geography
+
+model Wilaya {
+  id     Int    @id @default(autoincrement())
+  code   Int    @unique // 1-69; range enforced by Zod at the API boundary
+  nameFr String
+  nameAr String
+
+  communes      Commune[]
+  orders        Order[]
+  shippingRates ShippingRate[]
+}
+
+// Carriers charge different prices for the same destination, so shipping cannot
+// live on Wilaya. This table lets a shop load its courier's real price list as
+// data, with no schema change.
+model ShippingRate {
+  id        Int     @id @default(autoincrement())
+  wilayaId  Int
+  carrier   Carrier
+  deskPrice Int
+  homePrice Int
+  isDefault Boolean @default(false)
+
+  // Cascade: a rate is configuration attached to a wilaya and has no meaning
+  // without it. A wilaya referenced by any order is still protected --
+  // Order.wilaya is Restrict, which aborts the delete before it reaches here.
+  wilaya Wilaya @relation(fields: [wilayaId], references: [id], onDelete: Cascade)
+
+  // Leads with wilayaId, so it also serves lookups filtered by wilayaId alone.
+  // No separate @@index([wilayaId]) -- it would be a duplicate.
+  @@unique([wilayaId, carrier])
+}
+
+model Commune {
+  id       Int    @id @default(autoincrement())
+  wilayaId Int
+  name     String
+
+  // Cascade: communes are reference data owned by their wilaya. Re-seeding a
+  // wilaya should clear its communes. Any commune actually referenced by an
+  // order is still protected -- Order.commune is Restrict, which aborts the
+  // whole cascading delete.
+  wilaya Wilaya  @relation(fields: [wilayaId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  // Needed so the seed can upsert communes idempotently -- and correct on its
+  // own terms: no wilaya has two communes with the same name.
+  @@unique([wilayaId, name])
+  @@index([wilayaId])
+}
+
+// ---------------------------------------------------------------- orders
+
+model Order {
+  id           Int          @id @default(autoincrement())
+  orderNumber  String       @unique
+  customerName String
+  phone        String
+  wilayaId     Int
+  communeId    Int
+  address      String
+  deliveryType DeliveryType
+  subtotal     Int
+  shipping     Int
+  total        Int
+  status       OrderStatus  @default(PENDING)
+  notes        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  // Restrict on both: shipping geography referenced by a real order must not
+  // disappear. An order that lost its wilaya could not be re-priced, re-shipped
+  // or audited.
+  wilaya  Wilaya      @relation(fields: [wilayaId], references: [id], onDelete: Restrict)
+  commune Commune     @relation(fields: [communeId], references: [id], onDelete: Restrict)
+  items   OrderItem[]
+
+  @@index([phone]) // admin searches by phone constantly
+  @@index([status]) // admin filters by status constantly
+  @@index([createdAt]) // order list is sorted newest-first
+  @@index([wilayaId])
+  @@index([communeId])
+}
+
+model OrderItem {
+  id        Int  @id @default(autoincrement())
+  orderId   Int
+  variantId Int?
+  quantity  Int
+  unitPrice Int // price snapshot, in dinars, at the moment of ordering
+
+  // Identity snapshot, captured at the moment of ordering. These are what make
+  // order history immutable: renaming a product, recolouring a variant or
+  // deleting the variant outright cannot rewrite what this line says was sold.
+  // Always write these from the live Variant when the order is created.
+  productName  String
+  variantSize  String
+  variantColor String
+  sku          String
+
+  // Cascade: a line item is meaningless without its order. Deleting an order
+  // takes its lines. (Prefer status = CANCELLED over deleting orders at all.)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // SetNull: deleting a variant detaches it from historical lines instead of
+  // destroying them. The line keeps quantity, unitPrice and the four snapshot
+  // columns above, so the order stays fully readable; variantId simply becomes
+  // null, meaning "this SKU no longer exists in the catalogue".
+  variant Variant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([variantId])
+}
+
+// ----------------------------------------------------------------- admin
+
+// Admin accounts only. COD buyers never register -- an order carries its own
+// customerName/phone/address and has no User relation by design.
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
 }
