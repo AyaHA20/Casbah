@@ -1,0 +1,146 @@
+/* ============================================================
+   CASBAH — design tokens
+   Tailwind v4 (CSS-first config). No tailwind.config.js needed.
+   Place at: client/src/index.css
+   ============================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700;800&family=Work+Sans:wght@400;500;600&family=Reem+Kufi:wght@400;500;600&display=swap");
+
+@import "tailwindcss";
+
+@theme {
+  /* ---------- colours ---------- */
+  --color-cream: #f4f0db;      /* surfaces chaudes, texte sur vert */
+  --color-green: #4b674f;      /* primaire : boutons, titres        */
+  --color-rust: #ab3730;       /* accent seul, max ~5% de l'écran   */
+  --color-ink: #2e2e2e;        /* texte courant                     */
+  --color-line: #d6d6d6;       /* bordures, séparateurs, désactivé  */
+
+  /* dérivés utilitaires */
+  --color-cream-deep: #efebd3; /* panneaux admin, lignes actives */
+  --color-cream-edge: #e2dcbe; /* bordure des photos             */
+  --color-field: #fffdf3;      /* fond des champs                */
+  --color-ink-soft: #6b6b6b;   /* libellés secondaires           */
+
+  /* ---------- typographie ---------- */
+  --font-display: "Saira Condensed", Impact, sans-serif;
+  --font-sans: "Work Sans", Helvetica, Arial, sans-serif;
+  --font-kufi: "Reem Kufi", "Saira Condensed", sans-serif; /* wordmark */
+
+  --text-label: 0.75rem;
+  --text-label--line-height: 1;
+  --text-label--letter-spacing: 0.14em;
+
+  --text-meta: 0.8125rem;
+  --text-meta--line-height: 1.6;
+
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.65;
+
+  --text-body-lg: 1rem;
+  --text-body-lg--line-height: 1.7;
+
+  --text-lead: 1.125rem;
+  --text-lead--line-height: 1.65;
+
+  --text-h3: 1.625rem;
+  --text-h3--line-height: 1;
+  --text-h3--letter-spacing: 0.02em;
+
+  --text-h2: 2.5rem;
+  --text-h2--line-height: 1;
+  --text-h2--letter-spacing: 0.02em;
+
+  --text-h1: 2.875rem;
+  --text-h1--line-height: 0.92;
+  --text-h1--letter-spacing: -0.005em;
+
+  --text-display: 5.75rem;
+  --text-display--line-height: 0.9;
+  --text-display--letter-spacing: -0.01em;
+
+  /* ---------- espacement (base 4px) ---------- */
+  --spacing-gutter: 1.25rem;    /* 20 — gouttière mobile  */
+  --spacing-gutter-lg: 3.5rem;  /* 56 — gouttière desktop */
+  --spacing-section: 5rem;      /* 80 — rythme vertical   */
+  --spacing-field: 0.875rem;    /* 14 — padding des champs */
+
+  /* ---------- rayons ----------
+     L'ARC EST RÉSERVÉ AUX PHOTOS. Haut arrondi seulement, bas à 3px. */
+  --radius-sm: 0.625rem;   /* 10 — champs, sélecteurs de taille */
+  --radius-md: 0.875rem;   /* 14 — cartes, panneaux, steppers   */
+  --radius-lg: 1.125rem;   /* 18 — tuiles rayons, récapitulatif */
+  --radius-frame: 1.375rem;/* 22 — cadre d'écran                */
+  --radius-pill: 9999px;
+
+  --radius-arch: 5rem 5rem 3px 3px;          /*  80 — vignette produit mobile */
+  --radius-arch-md: 9.375rem 9.375rem 3px 3px; /* 150 — produit desktop       */
+  --radius-arch-lg: 17.5rem 17.5rem 3px 3px;   /* 280 — hero desktop          */
+
+  /* ---------- ombres ---------- */
+  --shadow-frame: 0 20px 50px rgb(46 46 46 / 0.1);
+
+  /* ---------- mesures ---------- */
+  --container-measure: 48ch;
+  --container-shell: 1440px;
+}
+
+/* ============================================================
+   Utilitaires personnalisés
+   ============================================================ */
+
+/* Fond des photos produit — le "glow" chaud derrière l'article */
+@utility bg-glow {
+  background-image: radial-gradient(
+    circle at 50% 45%,
+    #ffffff 0%,
+    #f4f0db 56%,
+    #f7f3e4 100%
+  );
+}
+
+/* Motif zellige — texture, jamais décoration.
+   À utiliser sur UNE section maximum, avec opacity-motif. */
+@utility bg-zellige {
+  background-image: repeating-conic-gradient(
+    from 45deg at 50% 50%,
+    #f4f0db 0deg 90deg,
+    transparent 90deg 180deg
+  );
+  background-size: 64px 64px;
+}
+
+@utility opacity-motif {
+  opacity: 0.05;
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+
+@layer base {
+  body {
+    background-color: #ffffff;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  /* Le mot-clé de marque : Reem Kufi, l'ancrage algérien */
+  .wordmark {
+    font-family: var(--font-kufi);
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+}
