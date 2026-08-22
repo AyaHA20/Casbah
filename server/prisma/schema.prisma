@@ -159,6 +159,12 @@ model Order {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
+  // Latch: flipped once when stock is returned to the shelf on CANCELLED or
+  // RETURNED. An order can pass through both of those states, and the stock
+  // must go back exactly once -- this is what the status transaction claims
+  // with a conditional write.
+  stockRestored Boolean @default(false)
+
   // Restrict on both: shipping geography referenced by a real order must not
   // disappear. An order that lost its wilaya could not be re-priced, re-shipped
   // or audited.

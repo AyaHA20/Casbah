@@ -25,8 +25,19 @@ or shipping cost sent from the client. Look prices up from the DB.
 **Order creation + stock decrement must be one transaction.** A failure
 must not leave stock wrong. Use `prisma.$transaction`.
 
-**Restore stock on `cancelled` and `returned`.** COD return rates here
-are high; this is a real code path, not an edge case.
+**Restore stock on `CANCELLED` and `RETURNED`.** COD return rates here
+are high; this is a real code path, not an edge case. Built, in
+`server/src/services/admin-orders.service.ts`: the restore runs inside
+the same transaction as the status change, guarded by the
+`Order.stockRestored` latch.
+
+That latch defends against **concurrent duplicate requests** — two admins
+hitting "Annuler" on the same order in the same second — not against a
+cancel-then-return sequence, which the transition table makes
+unreachable. It is the same conditional-write shape as order creation,
+with the guard moved from the stock column to the latch:
+`updateMany({ where: { id, status: current, stockRestored: false } })`.
+One caller wins, restores, and latches; the loser gets a 409.
 
 **Never commit `.env`.** The `SUPABASE_SERVICE_ROLE_KEY` is server-side
 only — never prefix a secret with `VITE_`, it ends up in the bundle.
@@ -38,6 +49,13 @@ only — never prefix a secret with `VITE_`, it ends up in the bundle.
 - Algerian phone format: `0[5-7]XXXXXXXX`. Validate it.
 - Order status: `pending → confirmed → shipped → delivered`,
   plus `returned` and `cancelled`.
+- `CANCELLED` and `RETURNED` are both terminal — nothing transitions out
+  of either. `DELIVERED → RETURNED` is allowed (the normal COD return).
+  `SHIPPED → CANCELLED` and `CANCELLED → RETURNED` are rejected: once a
+  parcel is out, it coming back is a *retour*, and letting cancellations
+  be relabelled as returns would corrupt the return-rate figure. The
+  table lives in `server/src/lib/order-status.ts` and is enforced
+  server-side and used to build the admin dropdown.
 - Orders are confirmed by phone call before shipping. Fake orders are
   the main source of loss in this market.
 - No customer accounts — COD buyers do not register. `User` is admin only.

@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { adminRouter } from './admin.routes.js'
 import { healthRouter } from './health.routes.js'
 import { ordersRouter } from './orders.routes.js'
 import { productsRouter } from './products.routes.js'
@@ -10,3 +11,4 @@ apiRouter.use('/health', healthRouter)
 apiRouter.use('/products', productsRouter)
 apiRouter.use('/wilayas', wilayasRouter)
 apiRouter.use('/orders', ordersRouter)
+apiRouter.use('/admin', adminRouter)
