@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import {
   ApiError,
   adminApi,
+  describeError,
   type AdminOrderDetail,
   type AdminOrderList,
   type AdminStats,
@@ -10,10 +11,13 @@ import {
 } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { fmtDA, fmtPhone } from '../../lib/format'
-import { DELIVERY_LABEL, STATUS_LABEL, STATUS_TONE, TABS, telHref } from '../../lib/status'
+import { DELIVERY_KEY, STATUS_KEY, STATUS_TONE, TABS, telHref } from '../../lib/status'
+import { Ltr, useT } from '../../lib/i18n'
 import { OrderPanel } from '../../components/admin/OrderPanel'
+import { CustomerBadge } from '../../components/admin/CustomerBadge'
 
 export function AdminCommandes() {
+  const { t, lang, locale } = useT()
   const { token, signOut } = useAuth()
   const [params, setParams] = useSearchParams()
 
@@ -33,7 +37,7 @@ export function AdminCommandes() {
   const guard = useCallback(
     (e: unknown) => {
       if (e instanceof ApiError && e.code === 'UNAUTHORIZED') signOut()
-      setError(e instanceof Error ? e.message : 'Erreur inconnue.')
+      setError(describeError(e))
     },
     [signOut],
   )
@@ -112,38 +116,38 @@ export function AdminCommandes() {
       {/* ---------------- Main column ---------------- */}
       <div className="flex flex-col gap-6 px-gutter py-7 lg:px-10 lg:pb-14 lg:pt-9">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <h1 className="text-[32px] lg:text-[42px]">Commandes</h1>
+          <h1 className="text-[32px] lg:text-[42px]">{t('admin.orders')}</h1>
 
           {/* Stats row — the design's three cells */}
           <div className="grid grid-cols-3 gap-3 lg:flex lg:gap-10">
-            <Stat value={String(stats?.pending ?? '—')} label="à traiter" />
+            <Stat value={String(stats?.pending ?? '—')} label={t('orders.toProcess')} />
             <Stat
-              value={stats ? fmtDA(stats.collected7d) : '—'}
-              label="encaissés (7 j)"
+              value={stats ? fmtDA(stats.collected7d, lang) : '—'}
+              label={t('orders.collected7d')}
             />
             <Stat
               value={
-                stats ? `${(stats.returnRate * 100).toLocaleString('fr-DZ', { maximumFractionDigits: 1 })} %` : '—'
+                stats ? `${(stats.returnRate * 100).toLocaleString(locale, { maximumFractionDigits: 1 })} %` : '—'
               }
-              label="retours"
+              label={t('orders.returnRate')}
             />
           </div>
         </div>
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
           <div className="flex gap-2 overflow-x-auto pb-1 lg:gap-[10px] lg:pb-0">
-            {TABS.map((t) => {
-              const on = tab === t.key
+            {TABS.map((tab_) => {
+              const on = tab === tab_.key
               return (
                 <button
-                  key={t.key}
+                  key={tab_.key}
                   type="button"
-                  onClick={() => setParam('tab', t.key === 'ALL' ? null : t.key)}
+                  onClick={() => setParam('tab', tab_.key === 'ALL' ? null : tab_.key)}
                   className={`whitespace-nowrap rounded-pill border px-4 py-[11px] text-meta font-semibold ${
                     on ? 'border-green bg-green text-cream' : 'border-line text-ink-soft'
                   }`}
                 >
-                  {t.label} · {tabCount(t.key)}
+                  {t(tab_.labelKey)} · {tabCount(tab_.key)}
                 </button>
               )
             })}
@@ -159,7 +163,7 @@ export function AdminCommandes() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Rechercher un téléphone — 0561…"
+              placeholder={t('orders.searchPhone')}
               inputMode="tel"
               className="w-full rounded-[12px] border border-line bg-field px-[14px] py-[11px] text-sm outline-none focus:border-green"
             />
@@ -175,33 +179,36 @@ export function AdminCommandes() {
         {/* ---- Desktop table ---- */}
         <div className="hidden lg:block">
           <div className="grid grid-cols-[110px_1.3fr_140px_1fr_110px_120px] gap-5 border-b border-ink py-3 text-label font-semibold uppercase text-ink-soft">
-            <span>N°</span>
-            <span>Client</span>
-            <span>Téléphone</span>
-            <span>Wilaya / mode</span>
-            <span className="text-right">Total</span>
-            <span className="text-right">Statut</span>
+            <span>{t('orders.number')}</span>
+            <span>{t('orders.customer')}</span>
+            <span>{t('orders.phone')}</span>
+            <span>{t('orders.wilayaMode')}</span>
+            <span className="text-end">{t('orders.total')}</span>
+            <span className="text-end">{t('orders.status')}</span>
           </div>
           {rows.map((o) => (
             <button
               key={o.id}
               type="button"
               onClick={() => setParam('order', String(o.id))}
-              className={`grid w-full grid-cols-[110px_1.3fr_140px_1fr_110px_120px] items-center gap-5 border-b border-line py-[18px] text-left text-sm ${
+              className={`grid w-full grid-cols-[110px_1.3fr_140px_1fr_110px_120px] items-center gap-5 border-b border-line py-[18px] text-start text-sm ${
                 o.id === selectedId ? 'bg-cream/40' : ''
               }`}
             >
-              <span className="font-semibold">{o.orderNumber}</span>
-              <span>{o.customerName}</span>
-              <span>{fmtPhone(o.phone)}</span>
+              <span className="font-semibold"><Ltr>{o.orderNumber}</Ltr></span>
+              <span className="flex flex-col gap-0.5">
+                {o.customerName}
+                <CustomerBadge customer={o.customer} />
+              </span>
+              <span><Ltr>{fmtPhone(o.phone)}</Ltr></span>
               <span className="text-ink-soft">
-                {o.wilaya.nameFr} · {DELIVERY_LABEL[o.deliveryType]}
+                {lang === 'ar' ? o.wilaya.nameAr : o.wilaya.nameFr} · {t(DELIVERY_KEY[o.deliveryType])}
               </span>
-              <span className="text-right font-display text-[17px] font-bold">
-                {fmtDA(o.total)}
+              <span className="text-end font-display text-[17px] font-bold">
+                {fmtDA(o.total, lang)}
               </span>
-              <span className={`text-right font-semibold ${STATUS_TONE[o.status]}`}>
-                {STATUS_LABEL[o.status]}
+              <span className={`text-end font-semibold ${STATUS_TONE[o.status]}`}>
+                {t(STATUS_KEY[o.status])}
               </span>
             </button>
           ))}
@@ -214,13 +221,13 @@ export function AdminCommandes() {
               key={o.id}
               type="button"
               onClick={() => setParam('order', String(o.id))}
-              className={`flex flex-col gap-2 border-t border-line py-4 text-left ${
+              className={`flex flex-col gap-2 border-t border-line py-4 text-start ${
                 o.id === selectedId ? 'bg-cream/40' : ''
               }`}
             >
               <div className="flex items-baseline justify-between">
                 <span className="text-[15px] font-semibold">{o.orderNumber}</span>
-                <span className="font-display text-[18px] font-bold">{fmtDA(o.total)}</span>
+                <span className="font-display text-[18px] font-bold">{fmtDA(o.total, lang)}</span>
               </div>
               <span className="text-meta">
                 {o.customerName} ·{' '}
@@ -229,15 +236,17 @@ export function AdminCommandes() {
                   onClick={(e) => e.stopPropagation()}
                   className="text-green"
                 >
-                  {fmtPhone(o.phone)}
+                  <Ltr>{fmtPhone(o.phone)}</Ltr>
                 </a>
               </span>
+              <CustomerBadge customer={o.customer} />
               <div className="flex justify-between text-xs text-ink-soft">
                 <span>
-                  {o.wilaya.nameFr} · {o.commune.name} · {DELIVERY_LABEL[o.deliveryType]}
+                  {lang === 'ar' ? o.wilaya.nameAr : o.wilaya.nameFr} · {o.commune.name} ·{' '}
+                  {t(DELIVERY_KEY[o.deliveryType])}
                 </span>
                 <span className={`font-semibold ${STATUS_TONE[o.status]}`}>
-                  {STATUS_LABEL[o.status]}
+                  {t(STATUS_KEY[o.status])}
                 </span>
               </div>
             </button>
@@ -246,7 +255,7 @@ export function AdminCommandes() {
 
         {list && rows.length === 0 && (
           <p className="py-10 text-center text-ink-soft">
-            {phone ? `Aucune commande pour « ${phone} ».` : 'Aucune commande dans cet onglet.'}
+            {phone ? t('orders.noneForPhone') : t('orders.emptyTab')}
           </p>
         )}
 
@@ -258,7 +267,7 @@ export function AdminCommandes() {
       </div>
 
       {/* ---------------- Detail panel ---------------- */}
-      <aside className="border-t border-line bg-cream/40 lg:min-h-[760px] lg:border-l lg:border-t-0">
+      <aside className="border-t border-line bg-cream/40 lg:min-h-[760px] lg:border-s lg:border-t-0">
         <OrderPanel order={detail} loading={detailLoading} onStatusChange={changeStatus} />
       </aside>
     </>

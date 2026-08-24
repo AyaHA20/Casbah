@@ -42,6 +42,17 @@ model Category {
   products Product[]
 }
 
+// What the garment physically IS, orthogonal to Category: a robe is
+// Category=Femme AND type=robe. Category is how the shop merchandises;
+// type is what the customer actually filters on.
+model ProductType {
+  id   Int    @id @default(autoincrement())
+  name String
+  slug String @unique
+
+  products Product[]
+}
+
 model Product {
   id          Int      @id @default(autoincrement())
   name        String
@@ -49,20 +60,32 @@ model Product {
   description String
   basePrice   Int
   categoryId  Int?
+  typeId      Int?
   images      String[]
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
 
+  // Where the goods came from and when they physically landed. Both optional,
+  // both entered by hand. arrivalDate is NOT createdAt: a product can be
+  // catalogued weeks before the cartons arrive, and when something returns
+  // often the owner needs to know which supplier sold it to them.
+  supplier    String?
+  arrivalDate DateTime?
+
   // SetNull: shop owners reorganise categories. Deleting one leaves its
   // products uncategorised rather than blocking the delete until every product
   // has been moved by hand. Uncategorised is recoverable; blocked is not.
-  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  // SetNull for the same reason as category: deleting a type should never
+  // block, and an untyped product is recoverable.
+  type     ProductType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
   variants Variant[]
 
   // slug is already @unique -> Postgres builds a unique B-tree index for it,
   // so an explicit @@index([slug]) would just be a duplicate. categoryId is a
   // FK and Postgres does NOT auto-index FKs, so this one is real work.
   @@index([categoryId])
+  @@index([typeId])
   @@index([active])
 }
 
@@ -138,6 +161,17 @@ model Commune {
   // own terms: no wilaya has two communes with the same name.
   @@unique([wilayaId, name])
   @@index([wilayaId])
+}
+
+// ------------------------------------------------------------- storefront
+
+// Owner-editable storefront copy and configuration. Key/value rather than
+// columns so the shop can gain a setting without a migration; every read is
+// validated by zod, and a missing key falls back to the built-in default.
+model Setting {
+  key       String   @id
+  value     String // JSON for anything structured
+  updatedAt DateTime @updatedAt
 }
 
 // ---------------------------------------------------------------- orders

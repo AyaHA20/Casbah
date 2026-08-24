@@ -1,9 +1,14 @@
+export type Lang = 'fr' | 'ar'
+
 /**
- * Prices are Int dinars. Grouped with a thin space (U+202F), never a comma or
- * period — "3 200 DA" is how prices are written here.
+ * Prices are Int dinars, grouped with a thin space (U+202F).
+ *
+ * Digits stay Western in both languages: Algeria and the Maghreb use 0-9 in
+ * commerce, unlike the Mashriq. Only the currency word changes.
  */
-export function fmtDA(amount: number): string {
-  return `${String(amount).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} DA`
+export function fmtDA(amount: number, lang: Lang = 'fr'): string {
+  const grouped = String(amount).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+  return `${grouped} ${lang === 'ar' ? 'د.ج' : 'DA'}`
 }
 
 /** 0561201234 -> "0561 20 12 34", the way the number is read aloud. */

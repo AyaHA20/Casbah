@@ -1,20 +1,24 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useCart } from '../lib/cart'
+import { useT } from '../lib/i18n'
+import { Ltr } from '../lib/i18n'
+import { LangToggle } from './LangToggle'
 
 const PHONE_DISPLAY = '0561 20 44 90'
 const PHONE_TEL = '0561204490'
 
 const NAV = [
-  { to: '/?category=femme', label: 'Femme' },
-  { to: '/?category=homme', label: 'Homme' },
-  { to: '/?category=nouveautes', label: 'Nouveautés' },
-  { to: '/livraison', label: 'Livraison' },
-  { to: '/contact', label: 'Contact' },
-]
+  { to: '/?category=femme', key: 'nav.femme' },
+  { to: '/?category=homme', key: 'nav.homme' },
+  { to: '/?category=nouveautes', key: 'nav.nouveautes' },
+  { to: '/livraison', key: 'nav.livraison' },
+  { to: '/contact', key: 'nav.contact' },
+] as const
 
 export function Header() {
   const { count } = useCart()
+  const { t } = useT()
   const [open, setOpen] = useState(false)
   const location = useLocation()
 
@@ -33,7 +37,7 @@ export function Header() {
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           aria-controls="menu-mobile"
-          aria-label={open ? 'Fermer le menu' : 'Ouvrir le menu'}
+          aria-label={open ? t('nav.menuClose') : t('nav.menuOpen')}
           className="font-display text-xl leading-none text-green"
         >
           {open ? '✕' : '☰'}
@@ -41,9 +45,12 @@ export function Header() {
         <Link to="/" className="wordmark text-[19px] text-ink">
           Casbah
         </Link>
-        <Link to="/commande" className="text-meta font-medium text-green">
-          Panier · {count}
-        </Link>
+        <div className="flex items-center gap-2">
+          <LangToggle compact />
+          <Link to="/commande" className="text-meta font-medium text-green">
+            {t('nav.cart')} · {count}
+          </Link>
+        </div>
       </div>
 
       {open && (
@@ -58,7 +65,7 @@ export function Header() {
                   to={item.to}
                   className="block py-[14px] font-display text-[22px] font-bold uppercase text-ink"
                 >
-                  {item.label}
+                  {t(item.key)}
                 </NavLink>
               </li>
             ))}
@@ -67,7 +74,7 @@ export function Header() {
             href={`tel:${PHONE_TEL}`}
             className="mt-4 block rounded-pill border border-green py-3 text-center text-sm font-semibold text-green"
           >
-            Appeler {PHONE_DISPLAY}
+            {t('nav.call')} <Ltr>{PHONE_DISPLAY}</Ltr>
           </a>
         </nav>
       )}
@@ -80,19 +87,20 @@ export function Header() {
         <nav className="flex gap-[34px] text-[15px] font-medium">
           {NAV.map((item) => (
             <NavLink key={item.to} to={item.to} className="text-ink hover:text-green">
-              {item.label}
+              {t(item.key)}
             </NavLink>
           ))}
         </nav>
         <div className="flex items-center gap-[22px] text-sm font-medium">
           <a href={`tel:${PHONE_TEL}`} className="text-ink hover:text-green">
-            {PHONE_DISPLAY}
+            <Ltr>{PHONE_DISPLAY}</Ltr>
           </a>
+          <LangToggle />
           <Link
             to="/commande"
             className="rounded-pill border border-green px-[18px] py-[9px] text-green hover:bg-green hover:text-cream"
           >
-            Panier · {count}
+            {t('nav.cart')} · {count}
           </Link>
         </div>
       </div>

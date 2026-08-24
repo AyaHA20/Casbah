@@ -6,6 +6,10 @@ export async function listProducts(query: ProductListQuery) {
   const where = {
     active: true,
     ...(query.category ? { category: { slug: query.category } } : {}),
+    ...(query.type ? { type: { slug: query.type } } : {}),
+    // Colour lives on Variant, so "a red product" means "has at least one red
+    // variant". `some` keeps this a single query rather than a post-filter.
+    ...(query.color ? { variants: { some: { color: query.color } } } : {}),
     ...(query.q
       ? {
           OR: [
@@ -30,6 +34,7 @@ export async function listProducts(query: ProductListQuery) {
         basePrice: true,
         images: true,
         category: { select: { name: true, slug: true } },
+        type: { select: { name: true, slug: true } },
         // Stock lives on Variant, so "is this product buyable" is only
         // answerable by looking at its variants.
         variants: { select: { stock: true } },
@@ -65,6 +70,7 @@ export async function getProductBySlug(slug: string) {
       images: true,
       createdAt: true,
       category: { select: { name: true, slug: true } },
+      type: { select: { name: true, slug: true } },
       variants: {
         orderBy: [{ color: 'asc' }, { size: 'asc' }],
         select: {
@@ -91,4 +97,24 @@ export async function getProductBySlug(slug: string) {
       available: v.stock > 0,
     })),
   }
+}
+
+/**
+ * Everything the storefront filter bar needs, in one request.
+ *
+ * Colours come from the variants of live products only — offering a filter that
+ * returns nothing is worse than not offering it.
+ */
+export async function listFilters() {
+  const [categories, types, colors] = await Promise.all([
+    prisma.category.findMany({ orderBy: { name: 'asc' }, select: { name: true, slug: true } }),
+    prisma.productType.findMany({ orderBy: { name: 'asc' }, select: { name: true, slug: true } }),
+    prisma.variant.findMany({
+      where: { product: { active: true } },
+      distinct: ['color'],
+      orderBy: { color: 'asc' },
+      select: { color: true },
+    }),
+  ])
+  return { categories, types, colors: colors.map((c) => c.color) }
 }

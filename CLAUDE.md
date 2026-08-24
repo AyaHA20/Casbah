@@ -95,6 +95,53 @@ saying *why*, not *what*.
 Ask before installing a new dependency.
 
 Work one phase at a time. Don't scaffold ahead.
-never call prisma.product.delete() — retirement is active = false
+prisma.product.delete() is allowed in EXACTLY one place: deleteProduct() in
+
+server/src/services/admin-catalog.service.ts, behind the DELETE
+
+/api/admin/products/:id endpoint. It refuses if any OrderItem references the
+
+product. Never call it anywhere else — not in seed scripts, not in fixtures,
+
+not in migrations. Retirement is still active = false; delete is only for
+
+goods that never sold (added by mistake, supplier cancelled, stock rejected
+
+and sent back).
 run npx prisma generate after every schema change
 I run migrations myself in PowerShell
+Never run `taskkill /F /IM node.exe` — it kills my API and Vite dev
+servers too. Kill specific PIDs only (netstat -ano finds the one you started).
+
+## Not yet built
+
+Honest list of what is missing, so nothing here reads as finished when
+it isn't.
+
+- **Nothing has been checked in a browser.** Every screen on both sides
+  typechecks and builds, and every endpoint behind them is verified by
+  API tests — but no page has been visually confirmed. Spacing, wrapping
+  and the `@media print` output of `/admin/commandes/:id/imprimer` all
+  need real eyes.
+- **Admin › Livraison** — the fourth nav item. No page; renders as inert
+  text rather than a dead link. Would edit `ShippingRate` rows so a shop
+  can load its courier's real price list.
+- **Storefront: Suivi de commande, Guide des tailles** — footer entries
+  with no page, also inert text.
+- **Shipping rates are placeholders.** Every wilaya has one `OTHER` rate
+  generated from a regional band. They are NOT Yalidine or ZR Express
+  prices and must never be shown as such. Real rates arrive as
+  `YALIDINE` / `ZR_EXPRESS` rows with `isDefault` moved onto the one the
+  shop actually uses.
+- **Seeded products have no photos.** Upload works end to end, but the 12
+  seeded products still have `images: []`, so the storefront draws the
+  arch-and-glow placeholder.
+- **No automated test suite.** Verification has been throwaway scripts
+  run once and deleted. There is no `npm test` that would catch a
+  regression tomorrow.
+
+## Migration verification
+`prisma migrate status` only compares the migrations folder to what's
+recorded as applied. It does NOT detect a model in schema.prisma that
+no migration ever created. On a P2021 "table does not exist", grep the
+migration SQL for CREATE TABLE rather than trusting the status summary.

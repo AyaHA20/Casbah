@@ -1,18 +1,24 @@
-import { Link } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
+import { LangToggle } from '../LangToggle'
+import { useT } from '../../lib/i18n'
 
-// The design's admin nav. Only Commandes exists as a page in this phase; the
-// other three render as inert text rather than links that go nowhere.
-const NAV = ['Commandes', 'Produits', 'Stock', 'Livraison']
+// The design's admin nav. Livraison has no admin page yet, so it stays inert
+// text rather than a link that goes nowhere.
+const NAV: Array<{ key: 'admin.orders' | 'admin.products' | 'admin.stock' | 'vitrine.title' | 'admin.shipping'; to: string | null }> = [
+  { key: 'admin.orders', to: '/admin/commandes' },
+  { key: 'admin.products', to: '/admin/produits' },
+  { key: 'admin.stock', to: '/admin/stock' },
+  { key: 'vitrine.title', to: '/admin/vitrine' },
+  { key: 'admin.shipping', to: null },
+]
 
-const DATE_FMT = new Intl.DateTimeFormat('fr-DZ', {
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-})
-const TIME_FMT = new Intl.DateTimeFormat('fr-DZ', { hour: '2-digit', minute: '2-digit' })
 
 export function AdminHeader({ now }: { now: Date }) {
+  const { t, locale } = useT()
+  // Built per render so a language switch reformats immediately.
+  const DATE_FMT = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' })
+  const TIME_FMT = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' })
   const { signOut, admin } = useAuth()
 
   return (
@@ -22,28 +28,31 @@ export function AdminHeader({ now }: { now: Date }) {
           <Link to="/admin" className="wordmark text-[19px] tracking-[0.18em]">
             Casbah
           </Link>
-          <span className="text-sm font-medium text-ink-soft">Administration</span>
+          <span className="text-sm font-medium text-ink-soft">{t('admin.title')}</span>
         </div>
 
         <nav className="order-3 flex w-full gap-5 overflow-x-auto text-sm font-medium lg:order-none lg:w-auto lg:gap-7">
-          {NAV.map((label) =>
-            label === 'Commandes' ? (
-              <Link key={label} to="/admin" className="whitespace-nowrap text-green">
-                {label}
-              </Link>
-            ) : (
-              <span
-                key={label}
-                title="Bientôt disponible"
-                className="whitespace-nowrap text-line"
+          {NAV.map(({ key, to }) =>
+            to ? (
+              <NavLink
+                key={key}
+                to={to}
+                className={({ isActive }) =>
+                  `whitespace-nowrap ${isActive ? 'text-green' : 'text-ink hover:text-green'}`
+                }
               >
-                {label}
+                {t(key)}
+              </NavLink>
+            ) : (
+              <span key={key} title={t('footer.soon')} className="whitespace-nowrap text-line">
+                {t(key)}
               </span>
             ),
           )}
         </nav>
 
         <div className="flex items-center gap-4">
+          <LangToggle compact />
           <span className="hidden text-meta text-ink-soft lg:inline">
             {DATE_FMT.format(now)} · {TIME_FMT.format(now)}
           </span>
@@ -53,7 +62,7 @@ export function AdminHeader({ now }: { now: Date }) {
             title={admin?.email ?? ''}
             className="rounded-pill border border-line px-3 py-1.5 text-meta text-ink-soft hover:border-green hover:text-green"
           >
-            Quitter
+            {t('admin.quit')}
           </button>
         </div>
       </div>

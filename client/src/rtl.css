@@ -1,0 +1,51 @@
+/* ============================================================
+   RTL / Arabic
+   Direction-only concerns. Design tokens stay in index.css.
+   ============================================================ */
+
+/* Reem Kufi carries Arabic body text; Work Sans has no Arabic coverage and the
+   browser would otherwise fall back to whatever it finds. Latin runs inside an
+   Arabic page (SKUs, order numbers) keep the sans stack. */
+[dir='rtl'] body {
+  font-family: var(--font-kufi), 'Noto Naskh Arabic', serif;
+}
+
+/* Saira Condensed has no Arabic glyphs either, so display headings in Arabic
+   fall back to Reem Kufi rather than rendering as boxes. */
+[dir='rtl'] h1,
+[dir='rtl'] h2,
+[dir='rtl'] h3,
+[dir='rtl'] .font-display {
+  font-family: var(--font-kufi), 'Noto Naskh Arabic', serif;
+  /* Reem Kufi has no condensed weight; 800 renders too heavy in Arabic. */
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* Arabic needs more line height than the Latin scale allows. */
+[dir='rtl'] body {
+  line-height: 1.8;
+}
+
+/* Latin runs must not be reordered by the bidi algorithm. */
+[dir='rtl'] .ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  display: inline-block;
+}
+
+/* Native controls follow the document direction. */
+[dir='rtl'] input,
+[dir='rtl'] textarea,
+[dir='rtl'] select {
+  text-align: start;
+}
+
+/* Numeric inputs stay LTR: a stock count typed right-to-left is unreadable. */
+[dir='rtl'] input[type='number'],
+[dir='rtl'] input[type='date'],
+[dir='rtl'] input[inputmode='numeric'],
+[dir='rtl'] input[type='tel'] {
+  direction: ltr;
+  text-align: end;
+}

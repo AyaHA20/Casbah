@@ -87,6 +87,21 @@ function placeholderRate(code: number, region: Region): [number, number] {
   return [desk, home]
 }
 
+// What the garment IS, orthogonal to CATEGORIES (how it is merchandised).
+// A robe is category=femme AND type=robe.
+const PRODUCT_TYPES: Array<{ name: string; slug: string }> = [
+  { name: 'Hoodie', slug: 'hoodie' },
+  { name: 'Sweat', slug: 'sweat' },
+  { name: 'T-shirt', slug: 't-shirt' },
+  { name: 'Top', slug: 'top' },
+  { name: 'Chemise', slug: 'chemise' },
+  { name: 'Robe', slug: 'robe' },
+  { name: 'Jupe', slug: 'jupe' },
+  { name: 'Pantalon', slug: 'pantalon' },
+  { name: 'Veste', slug: 'veste' },
+  { name: 'Survêtement', slug: 'survetement' },
+]
+
 const CATEGORIES: Array<{ name: string; slug: string }> = [
   { name: 'Femme', slug: 'femme' },
   { name: 'Homme', slug: 'homme' },
@@ -105,6 +120,7 @@ type ProductSpec = {
   slug: string
   sku: string
   category: string
+  type: string
   basePrice: number
   description: string
   colors: ColorSpec[]
@@ -114,6 +130,7 @@ const PRODUCTS: ProductSpec[] = [
   {
     name: 'Sweat capuche Casbah',
     slug: 'sweat-capuche-casbah',
+    type: 'hoodie',
     sku: 'CSB',
     category: 'nouveautes',
     basePrice: 4900,
@@ -128,6 +145,7 @@ const PRODUCTS: ProductSpec[] = [
   {
     name: 'T-shirt oversize Bab El Oued',
     slug: 't-shirt-oversize-bab-el-oued',
+    type: 't-shirt',
     sku: 'BEO',
     category: 'homme',
     basePrice: 2400,
@@ -142,6 +160,7 @@ const PRODUCTS: ProductSpec[] = [
   {
     name: 'Robe longue Zellige',
     slug: 'robe-longue-zellige',
+    type: 'robe',
     sku: 'ZLG',
     category: 'femme',
     basePrice: 5600,
@@ -155,6 +174,7 @@ const PRODUCTS: ProductSpec[] = [
   {
     name: 'Pantalon cargo Alger Centre',
     slug: 'pantalon-cargo-alger-centre',
+    type: 'pantalon',
     sku: 'ALC',
     category: 'homme',
     basePrice: 4200,
@@ -169,6 +189,7 @@ const PRODUCTS: ProductSpec[] = [
   {
     name: 'Veste en jean Sidi Fredj',
     slug: 'veste-en-jean-sidi-fredj',
+    type: 'veste',
     sku: 'SDF',
     category: 'homme',
     basePrice: 6800,
@@ -182,6 +203,7 @@ const PRODUCTS: ProductSpec[] = [
   {
     name: 'Chemise en lin Tipaza',
     slug: 'chemise-en-lin-tipaza',
+    type: 'chemise',
     sku: 'TPZ',
     category: 'homme',
     basePrice: 3900,
@@ -196,6 +218,7 @@ const PRODUCTS: ProductSpec[] = [
   {
     name: 'Jupe midi Mosaïque',
     slug: 'jupe-midi-mosaique',
+    type: 'jupe',
     sku: 'MSQ',
     category: 'femme',
     basePrice: 3600,
@@ -209,6 +232,7 @@ const PRODUCTS: ProductSpec[] = [
   {
     name: 'Sweat crewneck Tassili',
     slug: 'sweat-crewneck-tassili',
+    type: 'sweat',
     sku: 'TSL',
     category: 'nouveautes',
     basePrice: 4500,
@@ -223,6 +247,7 @@ const PRODUCTS: ProductSpec[] = [
   {
     name: 'Blouson bomber Kasbah Nuit',
     slug: 'blouson-bomber-kasbah-nuit',
+    type: 'veste',
     sku: 'KBN',
     category: 'nouveautes',
     basePrice: 7900,
@@ -236,6 +261,7 @@ const PRODUCTS: ProductSpec[] = [
   {
     name: 'Top côtelé Amazigh',
     slug: 'top-cotele-amazigh',
+    type: 'top',
     sku: 'AMZ',
     category: 'femme',
     basePrice: 2900,
@@ -250,6 +276,7 @@ const PRODUCTS: ProductSpec[] = [
   {
     name: 'Survêtement Djurdjura',
     slug: 'survetement-djurdjura',
+    type: 'survetement',
     sku: 'DJR',
     category: 'homme',
     basePrice: 6900,
@@ -263,6 +290,7 @@ const PRODUCTS: ProductSpec[] = [
   {
     name: 'Caftan moderne Andalou',
     slug: 'caftan-moderne-andalou',
+    type: 'robe',
     sku: 'AND',
     category: 'femme',
     basePrice: 8900,
@@ -416,11 +444,30 @@ async function seedCategories(): Promise<Map<string, number>> {
   return bySlug
 }
 
-async function seedProducts(categoryIdBySlug: Map<string, number>): Promise<void> {
+async function seedProductTypes(): Promise<Map<string, number>> {
+  const bySlug = new Map<string, number>()
+  for (const t of PRODUCT_TYPES) {
+    const row = await prisma.productType.upsert({
+      where: { slug: t.slug },
+      update: { name: t.name },
+      create: { name: t.name, slug: t.slug },
+    })
+    bySlug.set(t.slug, row.id)
+  }
+  console.log(`  types:      ${bySlug.size}`)
+  return bySlug
+}
+
+async function seedProducts(
+  categoryIdBySlug: Map<string, number>,
+  typeIdBySlug: Map<string, number>,
+): Promise<void> {
   let variantCount = 0
   for (const p of PRODUCTS) {
     const categoryId = categoryIdBySlug.get(p.category)
     if (!categoryId) throw new Error(`unknown category "${p.category}" on ${p.slug}`)
+    const typeId = typeIdBySlug.get(p.type)
+    if (!typeId) throw new Error(`unknown type "${p.type}" on ${p.slug}`)
 
     const product = await prisma.product.upsert({
       where: { slug: p.slug },
@@ -431,6 +478,7 @@ async function seedProducts(categoryIdBySlug: Map<string, number>): Promise<void
         description: p.description,
         basePrice: p.basePrice,
         categoryId,
+        typeId,
         active: true,
       },
       create: {
@@ -439,6 +487,7 @@ async function seedProducts(categoryIdBySlug: Map<string, number>): Promise<void
         description: p.description,
         basePrice: p.basePrice,
         categoryId,
+        typeId,
         images: [],
         active: true,
       },
@@ -509,7 +558,8 @@ async function main(): Promise<void> {
   await pruneStaleCommunes(wilayaIdByCode)
   await seedShippingRates(wilayaIdByCode)
   const categoryIdBySlug = await seedCategories()
-  await seedProducts(categoryIdBySlug)
+  const typeIdBySlug = await seedProductTypes()
+  await seedProducts(categoryIdBySlug, typeIdBySlug)
   await seedAdmin()
 
   console.log('Done.')

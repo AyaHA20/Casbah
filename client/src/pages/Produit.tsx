@@ -3,8 +3,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, type Product, type Variant } from '../lib/api'
 import { bySize, fmtDA, swatch } from '../lib/format'
 import { useCart } from '../lib/cart'
+import { useT } from '../lib/i18n'
 
 export function Produit() {
+  const { t, lang } = useT()
   const { slug = '' } = useParams()
   const navigate = useNavigate()
   const { add } = useCart()
@@ -55,17 +57,17 @@ export function Produit() {
   if (error) {
     return (
       <div className="mx-auto max-w-shell px-gutter py-section lg:px-gutter-lg">
-        <h1 className="text-h1">Introuvable</h1>
+        <h1 className="text-h1">{t('product.notFound')}</h1>
         <p className="mt-4 text-body text-ink-soft">{error}</p>
         <Link to="/" className="mt-6 inline-block text-green hover:text-rust">
-          ← Retour à la boutique
+          <span className="inline-block rtl:-scale-x-100">←</span> {t('product.back')}
         </Link>
       </div>
     )
   }
 
   if (!product) {
-    return <p className="px-gutter py-section text-center text-ink-soft">Chargement…</p>
+    return <p className="px-gutter py-section text-center text-ink-soft">{t('common.loading')}</p>
   }
 
   const price = selected?.price ?? product.basePrice
@@ -92,12 +94,16 @@ export function Produit() {
       <div className="hidden border-b border-line px-gutter-lg py-6 text-meta text-ink-soft lg:block">
         <div className="mx-auto max-w-shell">
           <Link to="/" className="hover:text-green">
-            Accueil
+            {t('product.breadcrumbHome')}
           </Link>
           {' / '}
-          <Link to={`/?category=${product.category.slug}`} className="hover:text-green">
-            {product.category.name}
-          </Link>
+          {product.category ? (
+            <Link to={`/?category=${product.category.slug}`} className="hover:text-green">
+              {product.category.name}
+            </Link>
+          ) : (
+            <span>{t('products.noCategory')}</span>
+          )}
           {' / '}
           <span className="text-ink">{product.name}</span>
         </div>
@@ -108,7 +114,7 @@ export function Produit() {
         <div>
           <div className="flex h-[400px] items-end justify-center rounded-arch border border-cream-edge bg-glow pb-4 lg:h-[720px] lg:rounded-arch-lg">
             <span className="text-[11px] uppercase tracking-[0.1em] text-ink-soft">
-              photo 1 — face, fond clair
+              {t('product.photoAlt')}
             </span>
           </div>
           <div className="grid grid-cols-4 gap-2 pt-[10px]">
@@ -127,16 +133,16 @@ export function Produit() {
         <div className="flex flex-col gap-5 py-6 lg:gap-[26px] lg:py-0">
           <div className="flex flex-col gap-2">
             <span className="wordmark text-[11px] text-green lg:text-meta">
-              {product.category.name} · Réf. {selected?.sku ?? product.slug}
+              {product.category?.name ?? t('products.noCategory')} · {t('product.ref')} {selected?.sku ?? product.slug}
             </span>
             <h1 className="text-[38px] leading-[0.94] lg:text-[60px] lg:leading-[0.92]">
               {product.name}
             </h1>
             <div className="flex items-baseline gap-3">
               <span className="font-display text-[30px] font-bold lg:text-[40px]">
-                {fmtDA(price)}
+                {fmtDA(price, lang)}
               </span>
-              <span className="text-meta text-ink-soft">TVA incluse · prix final</span>
+              <span className="text-meta text-ink-soft">{t('product.vat')}</span>
             </div>
             {selected && selected.stock > 0 && (
               <span className="text-meta font-medium text-green">
@@ -146,7 +152,7 @@ export function Produit() {
             )}
             {selected && selected.stock === 0 && (
               <span className="text-meta font-medium text-rust">
-                Épuisé dans cette taille et cette couleur.
+                {t('product.soldOutCombo')}
               </span>
             )}
           </div>
@@ -187,8 +193,8 @@ export function Produit() {
           {/* Taille */}
           <div className="flex flex-col gap-[10px]">
             <div className="flex items-baseline justify-between">
-              <span className="text-label font-semibold uppercase text-ink-soft">Taille</span>
-              <span className="text-xs text-green">Guide des tailles ↗</span>
+              <span className="text-label font-semibold uppercase text-ink-soft">{t('product.size')}</span>
+              <span className="text-xs text-green">{t('product.sizeGuide')} <span className="inline-block rtl:-scale-x-100">↗</span></span>
             </div>
             <div className="flex gap-2 lg:gap-[10px]">
               {sizesForColor.map((v) => {
@@ -219,14 +225,14 @@ export function Produit() {
             </div>
             {sizesForColor.some((v) => v.stock === 0) && (
               <span className="text-xs text-ink-soft">
-                Les tailles barrées sont épuisées pour cette couleur.
+                {t('product.struckHint')}
               </span>
             )}
           </div>
 
           {/* Quantité */}
           <div className="flex items-center gap-4 lg:gap-[18px]">
-            <span className="text-label font-semibold uppercase text-ink-soft">Quantité</span>
+            <span className="text-label font-semibold uppercase text-ink-soft">{t('product.quantity')}</span>
             <div className="flex items-center overflow-hidden rounded-[12px] border border-line">
               <button
                 type="button"
@@ -255,23 +261,23 @@ export function Produit() {
               disabled={!canAdd}
               className="flex-1 rounded-pill border border-green bg-green py-4 text-center text-[15px] font-semibold text-cream disabled:cursor-not-allowed disabled:border-line disabled:bg-line disabled:text-white lg:py-[18px] lg:text-base"
             >
-              {canAdd ? 'Ajouter au panier' : 'Indisponible'}
+              {canAdd ? t('product.addToCart') : t('product.cannotAdd')}
             </button>
             <button
               type="button"
               onClick={() => navigate('/commande')}
-              aria-label="Aller à la commande"
+              aria-label={t('cart.title')}
               className="grid h-[52px] w-[52px] flex-none place-items-center rounded-pill border border-green text-xl text-green lg:h-14 lg:w-14"
             >
-              ↗
+              <span className="inline-block rtl:-scale-x-100">↗</span>
             </button>
           </div>
 
           {added && (
             <p className="text-meta font-medium text-green">
-              Ajouté au panier.{' '}
+              {t('product.added')}{' '}
               <Link to="/commande" className="underline">
-                Passer la commande ↗
+                {t('product.goToCheckout')} ↗
               </Link>
             </p>
           )}
@@ -279,10 +285,10 @@ export function Produit() {
           {/* Info table */}
           <dl className="flex flex-col gap-[10px] border-t border-line pt-4 text-sm lg:gap-3 lg:pt-5 lg:text-[15px]">
             {[
-              ['Paiement', 'À la livraison, en espèces'],
-              ['Délai', '24 – 72 h après confirmation'],
-              ['Retour', '7 jours, article non porté'],
-              ['Une question ?', '0561 20 44 90'],
+              ['Paiement', t('product.paymentValue')],
+              ['Délai', t('product.delayValue')],
+              ['Retour', t('product.returnValue')],
+              [t('product.question'), '0561 20 44 90'],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between">
                 <dt className="text-ink-soft">{k}</dt>

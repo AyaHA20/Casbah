@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiError, adminApi } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
+import { useT } from '../../lib/i18n'
 
 export function AdminLogin() {
+  const { t } = useT()
   const { signIn } = useAuth()
   const navigate = useNavigate()
 
@@ -35,13 +37,13 @@ export function AdminLogin() {
       >
         <div className="flex flex-col gap-1">
           <span className="wordmark text-[22px]">Casbah</span>
-          <span className="text-meta text-ink-soft">Administration</span>
+          <span className="text-meta text-ink-soft">{t('admin.title')}</span>
         </div>
 
-        <h1 className="text-h3">Connexion</h1>
+        <h1 className="text-h3">{t('admin.login')}</h1>
 
         <label className="flex flex-col gap-1.5">
-          <span className="text-meta text-ink-soft">E-mail</span>
+          <span className="text-meta text-ink-soft">{t('admin.email')}</span>
           <input
             type="email"
             autoComplete="username"
@@ -53,7 +55,7 @@ export function AdminLogin() {
         </label>
 
         <label className="flex flex-col gap-1.5">
-          <span className="text-meta text-ink-soft">Mot de passe</span>
+          <span className="text-meta text-ink-soft">{t('admin.password')}</span>
           <input
             type="password"
             autoComplete="current-password"
@@ -78,7 +80,7 @@ export function AdminLogin() {
         </button>
 
         <p className="text-meta text-ink-soft">
-          Accès réservé au personnel de la boutique. Les clients n'ont pas de compte.
+          {t('admin.staffOnly')}
         </p>
       </form>
     </div>

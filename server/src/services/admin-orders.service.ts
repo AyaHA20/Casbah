@@ -9,6 +9,36 @@ import {
 import type { OrderListQuery } from '../schemas/admin.schema.js'
 import type { OrderStatus } from '../../generated/prisma/enums.js'
 
+export type CustomerHistory = { orderCount: number; returnedCount: number }
+
+const EMPTY_HISTORY: CustomerHistory = { orderCount: 0, returnedCount: 0 }
+
+/**
+ * Order history keyed by phone, for a batch of phones at once.
+ *
+ * COD buyers never register, so the phone number IS the customer identity.
+ * One groupBy covers every phone on the page — doing this per row would be an
+ * N+1 that grows with page size.
+ */
+async function phoneHistory(phones: string[]): Promise<Record<string, CustomerHistory>> {
+  const unique = [...new Set(phones)]
+  if (unique.length === 0) return {}
+
+  const grouped = await prisma.order.groupBy({
+    by: ['phone', 'status'],
+    where: { phone: { in: unique } },
+    _count: { _all: true },
+  })
+
+  const out: Record<string, CustomerHistory> = {}
+  for (const row of grouped) {
+    const entry = (out[row.phone] ??= { orderCount: 0, returnedCount: 0 })
+    entry.orderCount += row._count._all
+    if (row.status === 'RETURNED') entry.returnedCount += row._count._all
+  }
+  return out
+}
+
 export async function listOrders(query: OrderListQuery) {
   const where = {
     ...(query.status ? { status: query.status } : {}),
@@ -31,11 +61,16 @@ export async function listOrders(query: OrderListQuery) {
         status: true,
         deliveryType: true,
         createdAt: true,
-        wilaya: { select: { code: true, nameFr: true } },
+        // nameAr too: the admin renders wilaya names in the active language.
+        wilaya: { select: { code: true, nameFr: true, nameAr: true } },
         commune: { select: { name: true } },
       },
     }),
   ])
+
+  // Customer history for every phone on this page, in ONE query regardless of
+  // page size. Buyers have no accounts, so the phone number is the identity.
+  const history = await phoneHistory(rows.map((r) => r.phone))
 
   // Tab counts, so the filter pills can show numbers without a second request.
   const grouped = await prisma.order.groupBy({ by: ['status'], _count: { _all: true } })
@@ -44,7 +79,7 @@ export async function listOrders(query: OrderListQuery) {
   ) as Partial<Record<OrderStatus, number>>
 
   return {
-    data: rows,
+    data: rows.map((r) => ({ ...r, customer: history[r.phone] ?? EMPTY_HISTORY })),
     pagination: {
       page: query.page,
       limit: query.limit,
@@ -94,8 +129,14 @@ export async function getOrder(id: number) {
   })
   if (!order) throw notFound(`Commande introuvable : ${id}`)
 
+  const history = await phoneHistory([order.phone])
+
   // Only offer moves the transaction would actually accept.
-  return { ...order, allowedTransitions: ALLOWED_TRANSITIONS[order.status] }
+  return {
+    ...order,
+    allowedTransitions: ALLOWED_TRANSITIONS[order.status],
+    customer: history[order.phone] ?? EMPTY_HISTORY,
+  }
 }
 
 export async function changeStatus(id: number, next: OrderStatus) {
