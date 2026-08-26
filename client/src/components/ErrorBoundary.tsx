@@ -50,13 +50,13 @@ export class ErrorBoundary extends Component<Props, State> {
           <button
             type="button"
             onClick={() => this.setState({ error: null })}
-            className="rounded-pill border border-green px-5 py-2.5 text-meta font-semibold text-green"
+            className="min-h-11 rounded-pill border border-green px-5 py-2.5 text-meta font-semibold text-green"
           >
             Réessayer
           </button>
           <a
             href="/"
-            className="rounded-pill border border-green bg-green px-5 py-2.5 text-meta font-semibold text-cream"
+            className="inline-flex min-h-11 items-center rounded-pill border border-green bg-green px-5 py-2.5 text-meta font-semibold text-cream"
           >
             Retour à la boutique
           </a>

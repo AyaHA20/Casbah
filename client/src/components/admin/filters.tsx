@@ -40,7 +40,7 @@ export function Chip({
       onClick={onClick}
       aria-pressed={active}
       {...(title ? { title } : {})}
-      className={`whitespace-nowrap rounded-pill border px-3.5 py-[7px] text-meta font-semibold ${
+      className={`inline-flex min-h-11 items-center whitespace-nowrap rounded-pill border px-4 text-meta font-semibold ${
         active ? 'border-green bg-green text-cream' : 'border-line text-ink-soft hover:text-ink'
       }`}
     >
@@ -75,7 +75,7 @@ export function SortToggle({
       onClick={onToggle}
       aria-pressed={active}
       title={`${label} · ${active ? meaning : t('filters.sortAsc')}`}
-      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-pill border px-3.5 py-[7px] text-meta font-semibold ${
+      className={`inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-pill border px-4 text-meta font-semibold ${
         active ? 'border-green bg-green text-cream' : 'border-line text-ink-soft hover:text-ink'
       }`}
     >

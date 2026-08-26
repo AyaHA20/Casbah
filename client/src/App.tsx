@@ -15,6 +15,7 @@ import { AdminLogin } from './pages/admin/Login'
 import { AdminCommandes } from './pages/admin/Commandes'
 import { AdminProduits } from './pages/admin/Produits'
 import { AdminStock } from './pages/admin/Stock'
+import { AdminLivraison } from './pages/admin/Livraison'
 import { AdminVitrine } from './pages/admin/Vitrine'
 import { AdminImprimer } from './pages/admin/Imprimer'
 
@@ -84,6 +85,7 @@ export default function App() {
               <Route path="/admin/commandes" element={<AdminCommandes />} />
               <Route path="/admin/produits" element={<AdminProduits />} />
               <Route path="/admin/stock" element={<AdminStock />} />
+              <Route path="/admin/livraison" element={<AdminLivraison />} />
               <Route path="/admin/vitrine" element={<AdminVitrine />} />
             </Route>
           </Routes>

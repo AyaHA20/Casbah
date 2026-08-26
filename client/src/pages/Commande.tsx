@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { ApiError, api, type Commune, type CreatedOrder, type Wilaya } from '../lib/api'
 import { fmtDA } from '../lib/format'
 import { useCart } from '../lib/cart'
+import { FetchError } from '../components/FetchError'
+import { FieldSkeleton } from '../components/Skeleton'
 import { Ltr, useT } from '../lib/i18n'
 
 const PHONE_RE = /^0[5-7]\d{8}$/
@@ -25,17 +27,24 @@ export function Commande() {
   /** variantId -> units actually available, when the server says a line is short. */
   const [shortfall, setShortfall] = useState<Record<number, number>>({})
   const [error, setError] = useState<string | null>(null)
+  /** Destination lookups are separate from submit errors: one blocks the form. */
+  const [geoError, setGeoError] = useState<unknown>(null)
+  const [geoLoading, setGeoLoading] = useState(true)
+  const [reloadKey, setReloadKey] = useState(0)
   const [confirmed, setConfirmed] = useState<CreatedOrder | null>(null)
 
   useEffect(() => {
+    setGeoLoading(true)
+    setGeoError(null)
     api
       .listWilayas()
       .then((w) => {
         setWilayas(w)
         setWilayaCode((c) => c ?? w.find((x) => x.code === 16)?.code ?? w[0]?.code ?? null)
       })
-      .catch((e: Error) => setError(e.message))
-  }, [])
+      .catch((e: unknown) => setGeoError(e))
+      .finally(() => setGeoLoading(false))
+  }, [reloadKey])
 
   useEffect(() => {
     if (wilayaCode === null) return
@@ -47,8 +56,8 @@ export function Commande() {
         setCommunes(r.communes)
         setCommuneId(r.communes[0]?.id ?? null)
       })
-      .catch((e: Error) => setError(e.message))
-  }, [wilayaCode])
+      .catch((e: unknown) => setGeoError(e))
+  }, [wilayaCode, reloadKey])
 
   const wilaya = useMemo(
     () => wilayas.find((w) => w.code === wilayaCode) ?? null,
@@ -282,7 +291,7 @@ export function Commande() {
                   <button
                     type="button"
                     onClick={() => setQty(l.variantId, l.quantity - 1)}
-                    className="grid h-6 w-6 place-items-center rounded-sm border border-line text-green"
+                    className="grid h-11 w-11 place-items-center rounded-sm border border-line text-lg text-green"
                   >
                     −
                   </button>
@@ -290,7 +299,7 @@ export function Commande() {
                   <button
                     type="button"
                     onClick={() => setQty(l.variantId, Math.min(99, l.quantity + 1))}
-                    className="grid h-6 w-6 place-items-center rounded-sm border border-line text-green"
+                    className="grid h-11 w-11 place-items-center rounded-sm border border-line text-lg text-green"
                   >
                     +
                   </button>
@@ -336,7 +345,24 @@ export function Commande() {
                 : t('checkout.phoneHint')}
             </span>
           </label>
-          <label className="flex flex-col gap-1.5">
+          {geoError !== null && (
+            <div className="lg:col-span-2">
+              <FetchError
+                error={geoError}
+                onRetry={() => setReloadKey((k) => k + 1)}
+                compact
+              />
+            </div>
+          )}
+
+          {geoLoading && geoError === null && (
+            <>
+              <FieldSkeleton />
+              <FieldSkeleton />
+            </>
+          )}
+
+          <label className={`flex flex-col gap-1.5 ${geoLoading || geoError !== null ? 'hidden' : ''}`}>
             <span className={labelCls}>{t('checkout.wilaya')}</span>
             <select
               className={`${fieldCls} appearance-none`}
@@ -350,7 +376,7 @@ export function Commande() {
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1.5">
+          <label className={`flex flex-col gap-1.5 ${geoLoading || geoError !== null ? 'hidden' : ''}`}>
             <span className={labelCls}>{t('checkout.commune')}</span>
             <select
               className={`${fieldCls} appearance-none`}

@@ -44,6 +44,20 @@ only — never prefix a secret with `VITE_`, it ends up in the bundle.
 
 ## Domain notes
 
+- `Product.gender` (FEMME/HOMME/UNISEXE, optional) is separate from Category.
+  Category is merchandising — "Nouveautés" is not a gender. On the storefront
+  UNISEXE is NOT a third bucket: `gender=FEMME` widens to
+  `{ in: ['FEMME','UNISEXE'] }` so a unisex garment appears under both. The
+  API rejects `gender=UNISEXE` as a filter value.
+- **Category is seasonal/promotional only — never a gender.** Nouveautés,
+  Soldes, Collection été. The Femme and Homme categories were folded into
+  Nouveautés because having two fields answer "who is this for" let them
+  contradict each other. Never re-add a gendered category. Storefront nav and
+  the browse tiles filter on `?gender=`; the seasonal chips filter on
+  `?category=`, and the two AND together. Admin CRUD is the Rayons panel on
+  `/admin/produits`; deleting a section holding products is refused
+  (`CATEGORY_IN_USE`) because `categoryId` is `SetNull` and would silently
+  uncategorise them.
 - 69 wilayas. Shipping price varies ShippingRate
   (stop desk vs à domicile). Stop desk is cheaper.
 - Algerian phone format: `0[5-7]XXXXXXXX`. Validate it.
@@ -113,6 +127,11 @@ I run migrations myself in PowerShell
 Never run `taskkill /F /IM node.exe` — it kills my API and Vite dev
 servers too. Kill specific PIDs only (netstat -ano finds the one you started).
 
+Ports: **:4000** is my API and **:5173** my Vite dev server — never start,
+stop or bind either. Use **:4010** for your own test servers
+(`PORT=4010 npx tsx src/index.ts`) and kill only that PID. `client/.env`
+points at :4000, so the storefront needs my API running.
+
 ## Not yet built
 
 Honest list of what is missing, so nothing here reads as finished when
@@ -123,9 +142,6 @@ it isn't.
   API tests — but no page has been visually confirmed. Spacing, wrapping
   and the `@media print` output of `/admin/commandes/:id/imprimer` all
   need real eyes.
-- **Admin › Livraison** — the fourth nav item. No page; renders as inert
-  text rather than a dead link. Would edit `ShippingRate` rows so a shop
-  can load its courier's real price list.
 - **Storefront: Suivi de commande, Guide des tailles** — footer entries
   with no page, also inert text.
 - **Shipping rates are placeholders.** Every wilaya has one `OTHER` rate
@@ -133,9 +149,13 @@ it isn't.
   prices and must never be shown as such. Real rates arrive as
   `YALIDINE` / `ZR_EXPRESS` rows with `isDefault` moved onto the one the
   shop actually uses.
-- **Seeded products have no photos.** Upload works end to end, but the 12
-  seeded products still have `images: []`, so the storefront draws the
-  arch-and-glow placeholder.
+- **Three Nouveautés products have no `gender`** — Sweat capuche Casbah,
+  Sweat crewneck Tassili, Blouson bomber Kasbah Nuit. Until set they are
+  invisible to both the Femme and Homme storefront filters.
+- **Product/type/category Arabic is mostly empty.** The columns exist
+  (`nameAr`, `descriptionAr`) and the storefront falls back to French,
+  so an Arabic customer still reads French product names. Written by
+  hand, never machine-translated.
 - **No automated test suite.** Verification has been throwaway scripts
   run once and deleted. There is no `npm test` that would catch a
   regression tomorrow.

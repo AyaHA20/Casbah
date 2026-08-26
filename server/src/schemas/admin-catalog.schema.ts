@@ -36,6 +36,10 @@ export const ProductCreateBody = z.object({
     .optional(),
   typeId: emptyToNull(z.number().int().positive().nullable().optional()),
   supplier: emptyToNull(z.string().trim().max(120).nullable().optional()),
+  gender: emptyToNull(z.enum(['FEMME', 'HOMME', 'UNISEXE']).nullable().optional()),
+  // Written by hand; empty means "not translated yet", never a blank name.
+  nameAr: emptyToNull(z.string().trim().max(120).nullable().optional()),
+  descriptionAr: emptyToNull(z.string().trim().max(2000).nullable().optional()),
   // Date-only, as an <input type="date"> sends it. Kept as a plain string here
   // and converted at UTC midnight in the service, so a shop in Algiers and a
   // server in Ohio never disagree about which day the goods landed.
@@ -72,6 +76,12 @@ export const SignUploadBody = z.object({
 
 export const ImageAttachBody = z.object({
   path: z.string().trim().min(1).max(300),
+  // Null / absent = the shared set every colour falls back to.
+  color: emptyToNull(z.string().trim().max(40).nullable().optional()),
+})
+
+export const ImageDeleteBody = z.object({
+  imageId: z.number().int().positive(),
 })
 
 export const ImageDetachBody = z.object({

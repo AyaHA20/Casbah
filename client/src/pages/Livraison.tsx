@@ -1,20 +1,27 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, type Wilaya } from '../lib/api'
 import { useT } from '../lib/i18n'
+import { FetchError } from '../components/FetchError'
+import { Bar } from '../components/Skeleton'
 import { fmtDA } from '../lib/format'
 
 export function Livraison() {
   const { t, lang } = useT()
   const [wilayas, setWilayas] = useState<Wilaya[]>([])
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<unknown>(null)
+  const [loading, setLoading] = useState(true)
+  const [reloadKey, setReloadKey] = useState(0)
   const [query, setQuery] = useState('')
 
   useEffect(() => {
+    setLoading(true)
+    setError(null)
     api
       .listWilayas()
       .then(setWilayas)
-      .catch((e: Error) => setError(e.message))
-  }, [])
+      .catch((e: unknown) => setError(e))
+      .finally(() => setLoading(false))
+  }, [reloadKey])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -62,14 +69,23 @@ export function Livraison() {
           />
         </div>
 
-        {error && (
-          <p className="mt-6 rounded-md border border-rust/40 bg-rust/5 p-4 text-body text-rust">
-            {error}
-          </p>
+        {error !== null && (
+          <div className="mt-6">
+            <FetchError error={error} onRetry={() => setReloadKey((k) => k + 1)} />
+          </div>
         )}
 
-        {!error && wilayas.length === 0 && (
-          <p className="py-10 text-center text-ink-soft">{t('common.loading')}</p>
+        {/* Rate-table skeleton: same row rhythm as the real table. */}
+        {loading && error === null && (
+          <div className="mt-6 flex flex-col gap-3" role="status" aria-busy="true">
+            {Array.from({ length: 6 }, (_, i) => (
+              <div key={i} className="flex items-center justify-between gap-4 border-b border-line pb-3">
+                <Bar w="w-40" h="h-3.5" />
+                <Bar w="w-20" h="h-3.5" />
+                <Bar w="w-20" h="h-3.5" />
+              </div>
+            ))}
+          </div>
         )}
 
         {filtered.length > 0 && (

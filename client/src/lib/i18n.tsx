@@ -92,3 +92,17 @@ export function Ltr({ children }: { children: ReactNode }) {
     </span>
   )
 }
+
+/**
+ * Picks the Arabic value when the interface is Arabic AND a translation exists,
+ * otherwise the French one.
+ *
+ * The fallback lives here so no caller has to remember it: a product whose
+ * nameAr was never written must still render its French name, never an empty
+ * string. Product content is hand-written, so half-translated catalogues are
+ * the normal state, not an edge case.
+ */
+export function localized(fr: string, ar: string | null | undefined, lang: Lang): string {
+  if (lang === 'ar' && ar && ar.trim() !== '') return ar
+  return fr
+}

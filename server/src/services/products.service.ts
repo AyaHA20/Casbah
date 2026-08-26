@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js'
 import { notFound } from '../lib/http-error.js'
+import { cardImages, galleriesForProducts, listImages } from './product-images.service.js'
 import type { ProductListQuery } from '../schemas/product.schema.js'
 
 export async function listProducts(query: ProductListQuery) {
@@ -10,6 +11,10 @@ export async function listProducts(query: ProductListQuery) {
     // Colour lives on Variant, so "a red product" means "has at least one red
     // variant". `some` keeps this a single query rather than a post-filter.
     ...(query.color ? { variants: { some: { color: query.color } } } : {}),
+    // UNISEXE is not a third bucket: a unisex garment belongs under BOTH the
+    // Femme and Homme filters, so this widens rather than matching one value.
+    // Products with no gender set appear under neither until classified.
+    ...(query.gender ? { gender: { in: [query.gender, 'UNISEXE' as const] } } : {}),
     ...(query.q
       ? {
           OR: [
@@ -30,11 +35,13 @@ export async function listProducts(query: ProductListQuery) {
       select: {
         id: true,
         name: true,
+        nameAr: true,
         slug: true,
         basePrice: true,
         images: true,
-        category: { select: { name: true, slug: true } },
-        type: { select: { name: true, slug: true } },
+        gender: true,
+        category: { select: { name: true, nameAr: true, slug: true } },
+        type: { select: { name: true, nameAr: true, slug: true } },
         // Stock lives on Variant, so "is this product buyable" is only
         // answerable by looking at its variants.
         variants: { select: { stock: true } },
@@ -42,8 +49,14 @@ export async function listProducts(query: ProductListQuery) {
     }),
   ])
 
+  // Cards must follow the same fallback chain as the detail page, or a product
+  // photographed per-colour renders the placeholder here while showing fine one
+  // click away.
+  const galleries = await galleriesForProducts(rows.map((r) => r.id))
+
   const data = rows.map(({ variants, ...product }) => ({
     ...product,
+    images: cardImages(galleries.get(product.id), product.images),
     inStock: variants.some((v) => v.stock > 0),
   }))
 
@@ -64,13 +77,16 @@ export async function getProductBySlug(slug: string) {
     select: {
       id: true,
       name: true,
+      nameAr: true,
       slug: true,
       description: true,
+      descriptionAr: true,
       basePrice: true,
       images: true,
+      gender: true,
       createdAt: true,
-      category: { select: { name: true, slug: true } },
-      type: { select: { name: true, slug: true } },
+      category: { select: { name: true, nameAr: true, slug: true } },
+      type: { select: { name: true, nameAr: true, slug: true } },
       variants: {
         orderBy: [{ color: 'asc' }, { size: 'asc' }],
         select: {
@@ -87,8 +103,13 @@ export async function getProductBySlug(slug: string) {
 
   if (!product) throw notFound(`Produit introuvable : ${slug}`)
 
+  // Per-colour galleries alongside the legacy flat list. The client resolves
+  // which set to show; the fallback chain lives in one place on both sides.
+  const galleries = await listImages(product.id)
+
   return {
     ...product,
+    galleries,
     variants: product.variants.map((v) => ({
       ...v,
       // The price the customer actually pays. Resolved the same way here and in
@@ -107,8 +128,19 @@ export async function getProductBySlug(slug: string) {
  */
 export async function listFilters() {
   const [categories, types, colors] = await Promise.all([
-    prisma.category.findMany({ orderBy: { name: 'asc' }, select: { name: true, slug: true } }),
-    prisma.productType.findMany({ orderBy: { name: 'asc' }, select: { name: true, slug: true } }),
+    // Same rule as colours: a section with nothing live in it is a chip that
+    // leads to an empty grid. nameAr is selected because the filter bar
+    // localizes these labels — without it the Arabic chips fall back to French.
+    prisma.category.findMany({
+      where: { products: { some: { active: true } } },
+      orderBy: { name: 'asc' },
+      select: { name: true, nameAr: true, slug: true },
+    }),
+    prisma.productType.findMany({
+      where: { products: { some: { active: true } } },
+      orderBy: { name: 'asc' },
+      select: { name: true, nameAr: true, slug: true },
+    }),
     prisma.variant.findMany({
       where: { product: { active: true } },
       distinct: ['color'],

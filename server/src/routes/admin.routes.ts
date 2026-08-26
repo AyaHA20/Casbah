@@ -4,6 +4,7 @@ import { isStorageConfigured, createSignedUpload } from '../lib/storage.js'
 import { IdParam, LoginBody, OrderListQuery, StatusPatchBody } from '../schemas/admin.schema.js'
 import {
   ImageAttachBody,
+  ImageDeleteBody,
   ImageDetachBody,
   ProductCreateBody,
   ProductTypeCreateBody,
@@ -13,13 +14,31 @@ import {
   VariantCreateBody,
   VariantUpdateBody,
 } from '../schemas/admin-catalog.schema.js'
+import {
+  CategoryBody,
+  CategoryUpdateBody,
+  createCategory,
+  deleteCategory,
+  listCategories,
+  updateCategory,
+} from '../services/categories.service.js'
 import { login } from '../services/admin-auth.service.js'
+import {
+  RateListQuery,
+  RateUpsertBody,
+  SetDefaultBody,
+  deleteRate,
+  listRates,
+  setDefaultCarrier,
+  upsertRates,
+} from '../services/shipping-rates.service.js'
 import {
   SettingsUpdateBody,
   getSettings,
   updateSettings,
 } from '../services/settings.service.js'
 import { changeStatus, getOrder, listOrders, stats } from '../services/admin-orders.service.js'
+import { addImage, listImages, removeImage } from '../services/product-images.service.js'
 import {
   attachImage,
   createProduct,
@@ -103,6 +122,23 @@ adminRouter.delete('/variants/:id', async (req, res) => {
   res.json(await deleteVariant(IdParam.parse(req.params.id)))
 })
 
+// Categories are shop sections (Nouveautés, Soldes, …) — never gendered.
+adminRouter.get('/categories', async (_req, res) => {
+  res.json(await listCategories())
+})
+
+adminRouter.post('/categories', async (req, res) => {
+  res.status(201).json(await createCategory(CategoryBody.parse(req.body)))
+})
+
+adminRouter.patch('/categories/:id', async (req, res) => {
+  res.json(await updateCategory(IdParam.parse(req.params.id), CategoryUpdateBody.parse(req.body)))
+})
+
+adminRouter.delete('/categories/:id', async (req, res) => {
+  res.json(await deleteCategory(IdParam.parse(req.params.id)))
+})
+
 adminRouter.get('/product-types', async (_req, res) => {
   res.json(await listProductTypes())
 })
@@ -111,6 +147,28 @@ adminRouter.get('/product-types', async (_req, res) => {
 adminRouter.post('/product-types', async (req, res) => {
   const { name } = ProductTypeCreateBody.parse(req.body)
   res.status(201).json(await createProductType(name))
+})
+
+// ------------------------------------------------------------ shipping rates
+
+adminRouter.get('/shipping-rates', async (req, res) => {
+  const { carrier } = RateListQuery.parse(req.query)
+  res.json(await listRates(carrier))
+})
+
+// One shape for inline edit and bulk edit alike — the page just sends more rows.
+adminRouter.put('/shipping-rates', async (req, res) => {
+  res.json(await upsertRates(RateUpsertBody.parse(req.body)))
+})
+
+// Separate from price edits: changing which carrier a wilaya ships with is what
+// checkout reads, so it is never a side effect of typing a number.
+adminRouter.put('/shipping-rates/default', async (req, res) => {
+  res.json(await setDefaultCarrier(SetDefaultBody.parse(req.body)))
+})
+
+adminRouter.delete('/shipping-rates/:id', async (req, res) => {
+  res.json(await deleteRate(IdParam.parse(req.params.id)))
 })
 
 adminRouter.get('/stock', async (_req, res) => {
@@ -144,6 +202,24 @@ adminRouter.post('/products/:id/images/sign', async (req, res) => {
   const id = IdParam.parse(req.params.id)
   const { filename } = SignUploadBody.parse(req.body)
   res.json(await createSignedUpload(id, filename))
+})
+
+// Per-colour galleries. The legacy Product.images routes below still work and
+// act as the shared fallback for products photographed before this existed.
+adminRouter.get('/products/:id/photos', async (req, res) => {
+  res.json(await listImages(IdParam.parse(req.params.id)))
+})
+
+adminRouter.post('/products/:id/photos', async (req, res) => {
+  const id = IdParam.parse(req.params.id)
+  const { path, color } = ImageAttachBody.parse(req.body)
+  res.status(201).json(await addImage(id, path, color ?? null))
+})
+
+adminRouter.delete('/products/:id/photos', async (req, res) => {
+  const id = IdParam.parse(req.params.id)
+  const { imageId } = ImageDeleteBody.parse(req.body)
+  res.json(await removeImage(id, imageId))
 })
 
 adminRouter.post('/products/:id/images', async (req, res) => {

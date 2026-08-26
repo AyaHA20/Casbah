@@ -1,21 +1,57 @@
-const BASE = import.meta.env['VITE_API_URL'] ?? 'http://localhost:4000/api'
+/**
+ * Where the API lives. Configurable per deployment via VITE_API_URL.
+ *
+ * Accepts either form — with or without the /api suffix — because both are
+ * natural things to paste into an env file, and getting it wrong 404s every
+ * request with no clue why. The server mounts its router at /api, so that
+ * segment is appended when it is missing rather than assumed.
+ *
+ * VITE_ vars are inlined into the public bundle at build time: never put a
+ * secret here.
+ */
+function resolveApiBase(): string {
+  const raw = import.meta.env.VITE_API_URL?.trim() || 'http://localhost:4000'
+  const trimmed = raw.replace(/\/+$/, '')
+  return /\/api$/i.test(trimmed) ? trimmed : `${trimmed}/api`
+}
 
-export type Category = { name: string; slug: string }
+const BASE = resolveApiBase()
+
+export type Category = { name: string; nameAr: string | null; slug: string }
 /** What the garment IS — orthogonal to Category. A robe is femme AND robe. */
-export type ProductTypeRef = { name: string; slug: string }
+export type ProductTypeRef = { name: string; nameAr: string | null; slug: string }
 export type AdminProductType = { id: number; name: string; slug: string; _count?: { products: number } }
+/**
+ * A shop section — Nouveautés, Soldes, Collection été. Never a gender.
+ *
+ * `_count.products` is what the delete button reads: the server refuses to
+ * delete a section that still holds products, so the count is shown before
+ * anyone clicks rather than as an error afterwards.
+ */
+export type AdminCategory = {
+  id: number
+  name: string
+  nameAr: string | null
+  slug: string
+  _count: { products: number }
+}
 export type StorefrontFilters = {
   categories: Category[]
   types: ProductTypeRef[]
   colors: string[]
 }
 
+/** Who the garment is cut for. UNISEXE shows under both Femme and Homme. */
+export type Gender = 'FEMME' | 'HOMME' | 'UNISEXE'
+
 export type ProductListItem = {
   id: number
   name: string
+  nameAr: string | null
   slug: string
   basePrice: number
   images: string[]
+  gender: Gender | null
   /** Null for an uncategorised product — Product.categoryId is nullable. */
   category: Category | null
   type: ProductTypeRef | null
@@ -43,14 +79,19 @@ export type Variant = {
 export type Product = {
   id: number
   name: string
+  nameAr: string | null
   slug: string
   description: string
+  descriptionAr: string | null
   basePrice: number
   images: string[]
+  gender: Gender | null
   createdAt: string
   /** Null for an uncategorised product — Product.categoryId is nullable. */
   category: Category | null
   type: ProductTypeRef | null
+  /** Per-colour photo sets; absent on older responses. */
+  galleries?: ColourGallery[]
   variants: Variant[]
 }
 
@@ -64,6 +105,32 @@ export type Wilaya = {
 }
 
 export type Commune = { id: number; name: string }
+
+/** Photos for one colour. `color: null` is the shared fallback set. */
+export type ColourGallery = {
+  color: string | null
+  images: Array<{ id: number; url: string; position: number }>
+}
+
+/**
+ * Which photos to show for a colour.
+ *
+ * Same fallback chain as the server: the colour's own set, then the shared
+ * set, then the legacy flat Product.images. Kept in one function so the two
+ * sides cannot drift.
+ */
+export function resolveGallery(
+  galleries: ColourGallery[] | undefined,
+  legacyImages: string[],
+  color: string | null,
+): string[] {
+  const g = galleries ?? []
+  const own = color === null ? [] : (g.find((x) => x.color === color)?.images ?? [])
+  if (own.length > 0) return own.map((i) => i.url)
+  const shared = g.find((x) => x.color === null)?.images ?? []
+  if (shared.length > 0) return shared.map((i) => i.url)
+  return legacyImages
+}
 
 export type CreatedOrder = {
   orderNumber: string
@@ -181,6 +248,9 @@ export type AdminProduct = {
   active: boolean
   createdAt: string
   supplier: string | null
+  gender: Gender | null
+  nameAr: string | null
+  descriptionAr: string | null
   /** ISO instant; the date part is the calendar day the goods arrived. */
   arrivalDate: string | null
   category: { id: number; name: string; slug: string } | null
@@ -189,6 +259,8 @@ export type AdminProduct = {
   variants: AdminVariant[]
   totalStock: number
   lowStock: boolean
+  /** Photos across every colour gallery, not just the legacy flat list. */
+  photoCount?: number
 }
 
 export type StockPayload = {
@@ -270,6 +342,20 @@ export type StorefrontSettings = {
 
 export type Storefront = StorefrontSettings & { featured: ProductListItem[] }
 
+export type CarrierName = 'YALIDINE' | 'ZR_EXPRESS' | 'OTHER'
+
+export type RateRow = {
+  id: number
+  code: number
+  nameFr: string
+  nameAr: string
+  rate: { id: number; carrier: CarrierName; deskPrice: number; homePrice: number; isDefault: boolean } | null
+  defaultCarrier: CarrierName | null
+  isDefault: boolean
+}
+
+export type RateList = { carrier: CarrierName; data: RateRow[] }
+
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` })
 
 export const adminApi = {
@@ -341,6 +427,7 @@ export const adminApi = {
       basePrice: number
       categoryId?: number | null
       supplier?: string | null
+      gender?: Gender | null
       arrivalDate?: string | null
       typeId?: number | null
     },
@@ -361,6 +448,7 @@ export const adminApi = {
       categoryId: number | null
       active: boolean
       supplier: string | null
+      gender: Gender | null
       arrivalDate: string | null
       typeId: number | null
     }>,
@@ -369,6 +457,23 @@ export const adminApi = {
       method: 'PATCH',
       headers: auth(token),
       body: JSON.stringify(body),
+    }),
+
+  listPhotos: (token: string, productId: number) =>
+    request<ColourGallery[]>(`/admin/products/${productId}/photos`, { headers: auth(token) }),
+
+  addPhoto: (token: string, productId: number, path: string, color: string | null) =>
+    request<ColourGallery[]>(`/admin/products/${productId}/photos`, {
+      method: 'POST',
+      headers: auth(token),
+      body: JSON.stringify({ path, color }),
+    }),
+
+  removePhoto: (token: string, productId: number, imageId: number) =>
+    request<ColourGallery[]>(`/admin/products/${productId}/photos`, {
+      method: 'DELETE',
+      headers: auth(token),
+      body: JSON.stringify({ imageId }),
     }),
 
   deleteProduct: (token: string, id: number) =>
@@ -401,7 +506,53 @@ export const adminApi = {
       headers: auth(token),
     }),
 
+  listRates: (token: string, carrier: CarrierName) =>
+    request<RateList>(`/admin/shipping-rates?carrier=${carrier}`, { headers: auth(token) }),
+
+  saveRates: (
+    token: string,
+    carrier: CarrierName,
+    rates: Array<{ wilayaCode: number; deskPrice: number; homePrice: number }>,
+  ) =>
+    request<RateList>('/admin/shipping-rates', {
+      method: 'PUT',
+      headers: auth(token),
+      body: JSON.stringify({ carrier, rates }),
+    }),
+
+  setDefaultCarrier: (token: string, carrier: CarrierName, wilayaCodes: number[]) =>
+    request<RateList>('/admin/shipping-rates/default', {
+      method: 'PUT',
+      headers: auth(token),
+      body: JSON.stringify({ carrier, wilayaCodes }),
+    }),
+
   lowStock: (token: string) => request<StockPayload>('/admin/stock', { headers: auth(token) }),
+
+  listCategories: (token: string) =>
+    request<AdminCategory[]>('/admin/categories', { headers: auth(token) }),
+
+  createCategory: (token: string, body: { name: string; nameAr?: string | null }) =>
+    request<AdminCategory>('/admin/categories', {
+      method: 'POST',
+      headers: auth(token),
+      body: JSON.stringify(body),
+    }),
+
+  // The slug is deliberately not re-derived server-side on rename: it lives in
+  // storefront URLs, so a typo fix must not break a link someone shared.
+  updateCategory: (token: string, id: number, body: { name?: string; nameAr?: string | null }) =>
+    request<AdminCategory>(`/admin/categories/${id}`, {
+      method: 'PATCH',
+      headers: auth(token),
+      body: JSON.stringify(body),
+    }),
+
+  deleteCategory: (token: string, id: number) =>
+    request<{ deleted: boolean; name: string }>(`/admin/categories/${id}`, {
+      method: 'DELETE',
+      headers: auth(token),
+    }),
 
   listProductTypes: (token: string) =>
     request<AdminProductType[]>('/admin/product-types', { headers: auth(token) }),
@@ -477,6 +628,8 @@ export const api = {
       category?: string
       type?: string
       color?: string
+      /** Only FEMME or HOMME — UNISEXE is folded into both server-side. */
+      gender?: 'FEMME' | 'HOMME'
       q?: string
       page?: number
       limit?: number
@@ -486,6 +639,7 @@ export const api = {
     if (params.category) qs.set('category', params.category)
     if (params.type) qs.set('type', params.type)
     if (params.color) qs.set('color', params.color)
+    if (params.gender) qs.set('gender', params.gender)
     if (params.q) qs.set('q', params.q)
     if (params.page) qs.set('page', String(params.page))
     if (params.limit) qs.set('limit', String(params.limit))

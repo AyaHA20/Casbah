@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma.js'
 import type { Prisma } from '../../generated/prisma/client.js'
 import { badRequest, conflict, notFound } from '../lib/http-error.js'
 import { pathFromPublicUrl, publicUrl, removeObject } from '../lib/storage.js'
+import { galleriesForProducts, photoCount, renameColour } from './product-images.service.js'
 import type {
   ProductCreateBody,
   ProductListQueryAdmin,
@@ -36,8 +37,11 @@ const productSelect = {
   createdAt: true,
   supplier: true,
   arrivalDate: true,
-  category: { select: { id: true, name: true, slug: true } },
-  type: { select: { id: true, name: true, slug: true } },
+  gender: true,
+  nameAr: true,
+  descriptionAr: true,
+  category: { select: { id: true, name: true, nameAr: true, slug: true } },
+  type: { select: { id: true, name: true, nameAr: true, slug: true } },
   variants: {
     orderBy: [{ color: 'asc' }, { size: 'asc' }],
     select: {
@@ -114,8 +118,15 @@ export async function listProductsAdmin(query: ProductListQueryAdmin) {
       ? data.length
       : await prisma.product.count({ where })
 
+  // The admin count was reading Product.images only, so a product photographed
+  // per-colour showed "0 photos" while its galleries were full.
+  const galleries = await galleriesForProducts(data.map((p) => p.id))
+
   return {
-    data: data.map(withStockTotals),
+    data: data.map((p) => ({
+      ...withStockTotals(p),
+      photoCount: photoCount(galleries.get(p.id), p.images),
+    })),
     pagination: {
       page: query.page,
       limit: query.limit,
@@ -160,6 +171,9 @@ export async function createProduct(body: ProductCreateBody) {
       images: [],
       active: true,
       supplier: body.supplier ?? null,
+      gender: body.gender ?? null,
+      nameAr: body.nameAr ?? null,
+      descriptionAr: body.descriptionAr ?? null,
       arrivalDate: body.arrivalDate ? toUtcDate(body.arrivalDate) : null,
     },
     select: productSelect,
@@ -193,6 +207,9 @@ export async function updateProduct(id: number, body: ProductUpdateBody) {
       ...(body.typeId !== undefined ? { typeId: body.typeId } : {}),
       ...(body.active !== undefined ? { active: body.active } : {}),
       ...(body.supplier !== undefined ? { supplier: body.supplier } : {}),
+      ...(body.gender !== undefined ? { gender: body.gender } : {}),
+      ...(body.nameAr !== undefined ? { nameAr: body.nameAr } : {}),
+      ...(body.descriptionAr !== undefined ? { descriptionAr: body.descriptionAr } : {}),
       ...(body.arrivalDate !== undefined
         ? { arrivalDate: body.arrivalDate ? toUtcDate(body.arrivalDate) : null }
         : {}),
@@ -335,6 +352,15 @@ export async function updateVariant(id: number, body: VariantUpdateBody) {
     if (clash && clash.id !== id) {
       throw conflict('VARIANT_EXISTS', `Ce produit a déjà une déclinaison ${size} / ${color}.`)
     }
+  }
+
+  // ProductImage.color is a plain string, not a FK, so a colour rename has to
+  // carry its gallery across explicitly or the photos are orphaned.
+  if (body.color !== undefined && body.color !== existing.color) {
+    const stillUsed = await prisma.variant.count({
+      where: { productId: existing.productId, color: existing.color, id: { not: id } },
+    })
+    if (stillUsed === 0) await renameColour(existing.productId, existing.color, body.color)
   }
 
   return prisma.variant.update({

@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom'
 import {
   ApiError,
   adminApi,
-  describeError,
   type AdminOrderDetail,
   type AdminOrderList,
   type AdminStats,
@@ -14,6 +13,8 @@ import { fmtDA, fmtPhone } from '../../lib/format'
 import { DELIVERY_KEY, STATUS_KEY, STATUS_TONE, TABS, telHref } from '../../lib/status'
 import { Ltr, useT } from '../../lib/i18n'
 import { OrderPanel } from '../../components/admin/OrderPanel'
+import { FetchError } from '../../components/FetchError'
+import { TableSkeleton } from '../../components/Skeleton'
 import { CustomerBadge } from '../../components/admin/CustomerBadge'
 
 export function AdminCommandes() {
@@ -29,7 +30,9 @@ export function AdminCommandes() {
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [detail, setDetail] = useState<AdminOrderDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<unknown>(null)
+  const [listLoading, setListLoading] = useState(true)
+  const [reloadKey, setReloadKey] = useState(0)
   const [search, setSearch] = useState(phone)
 
   // A 401 anywhere means the 12h session lapsed — drop it so the router sends
@@ -37,7 +40,7 @@ export function AdminCommandes() {
   const guard = useCallback(
     (e: unknown) => {
       if (e instanceof ApiError && e.code === 'UNAUTHORIZED') signOut()
-      setError(describeError(e))
+      setError(e)
     },
     [signOut],
   )
@@ -46,6 +49,7 @@ export function AdminCommandes() {
     if (!token) return
     try {
       setError(null)
+      setListLoading(true)
       const [l, s] = await Promise.all([
         adminApi.listOrders(token, {
           ...(tab !== 'ALL' ? { status: tab } : {}),
@@ -58,8 +62,10 @@ export function AdminCommandes() {
       setStats(s)
     } catch (e) {
       guard(e)
+    } finally {
+      setListLoading(false)
     }
-  }, [token, tab, phone, guard])
+  }, [token, tab, phone, guard, reloadKey])
 
   useEffect(() => {
     void refresh()
@@ -143,7 +149,7 @@ export function AdminCommandes() {
                   key={tab_.key}
                   type="button"
                   onClick={() => setParam('tab', tab_.key === 'ALL' ? null : tab_.key)}
-                  className={`whitespace-nowrap rounded-pill border px-4 py-[11px] text-meta font-semibold ${
+                  className={`min-h-11 whitespace-nowrap rounded-pill border px-4 py-[11px] text-meta font-semibold ${
                     on ? 'border-green bg-green text-cream' : 'border-line text-ink-soft'
                   }`}
                 >
@@ -165,16 +171,16 @@ export function AdminCommandes() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('orders.searchPhone')}
               inputMode="tel"
-              className="w-full rounded-[12px] border border-line bg-field px-[14px] py-[11px] text-sm outline-none focus:border-green"
+              className="min-h-11 w-full rounded-[12px] border border-line bg-field px-[14px] py-[11px] text-sm outline-none focus:border-green"
             />
           </form>
         </div>
 
-        {error && (
-          <p className="rounded-md border border-rust/40 bg-rust/5 p-4 text-body text-rust">
-            {error}
-          </p>
+        {error !== null && (
+          <FetchError error={error} onRetry={() => setReloadKey((k) => k + 1)} />
         )}
+
+        {listLoading && error === null && <TableSkeleton rows={6} cols="lg:grid-cols-[110px_1.3fr_140px_1fr_110px_120px]" />}
 
         {/* ---- Desktop table ---- */}
         <div className="hidden lg:block">

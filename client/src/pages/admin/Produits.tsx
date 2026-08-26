@@ -2,15 +2,21 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ApiError,
   adminApi,
-  describeError,
   uploadToSignedUrl,
   type AdminProduct,
+  type Gender,
+  type ColourGallery,
+  type AdminCategory,
   type AdminProductType,
   type AdminVariant,
 } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
-import { fmtDA } from '../../lib/format'
+import { FetchError } from '../../components/FetchError'
+import { TableSkeleton } from '../../components/Skeleton'
+import { fmtDA, swatch } from '../../lib/format'
 import { Ltr, useT } from '../../lib/i18n'
+import { DateField } from '../../components/admin/DateField'
+import { CategoryPicker, RayonsPanel } from '../../components/admin/CategoryManager'
 import {
   Chip,
   FIELD,
@@ -32,7 +38,7 @@ function fmtDate(iso: string | null, locale: string): string {
   return dateFmt(locale).format(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
 }
 
-/** ISO instant -> "2026-08-19" for <input type="date">. */
+/** ISO instant -> "2026-08-19", the value DateField reads and writes. */
 function toDateInput(iso: string | null): string {
   return iso ? iso.slice(0, 10) : ''
 }
@@ -45,6 +51,42 @@ const SORTS: Array<{ key: SortKey; labelKey: 'products.sortRecent' | 'products.s
 ]
 
 const LABEL = 'text-meta text-ink-soft'
+
+const GENDERS = ['FEMME', 'HOMME', 'UNISEXE'] as const
+
+/**
+ * Three-way gender selector, plus "not set".
+ *
+ * Separate from Category on purpose: "Nouveautés" is not a gender, and a
+ * unisex garment should not have to be filed as one or the other.
+ */
+function GenderPicker({
+  value,
+  onChange,
+}: {
+  value: Gender | null
+  onChange: (g: Gender | null) => void
+}) {
+  const { t } = useT()
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className={LABEL}>
+        {t('gender.label')} {t('common.optional')}
+      </span>
+      <div className="flex flex-wrap gap-2">
+        <Chip active={value === null} onClick={() => onChange(null)}>
+          {t('gender.none')}
+        </Chip>
+        {GENDERS.map((g) => (
+          <Chip key={g} active={value === g} onClick={() => onChange(g)}>
+            {t(`gender.${g}`)}
+          </Chip>
+        ))}
+      </div>
+      <span className="text-xs text-ink-soft">{t('gender.hint')}</span>
+    </div>
+  )
+}
 
 type Etat = 'all' | 'active' | 'inactive'
 const ETATS: Array<{ key: Etat; labelKey: 'products.all' | 'products.activeOnly' | 'products.inactiveOnly' }> = [
@@ -59,11 +101,14 @@ export function AdminProduits() {
   const [products, setProducts] = useState<AdminProduct[]>([])
   const [openId, setOpenId] = useState<number | null>(null)
   const [creating, setCreating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<unknown>(null)
+  const [listLoading, setListLoading] = useState(true)
+  const [reloadKey, setReloadKey] = useState(0)
   const [storageOn, setStorageOn] = useState<boolean | null>(null)
   const [q, setQ] = useState('')
   const [sort, setSort] = useState<SortKey>('recent')
   const [types, setTypes] = useState<AdminProductType[]>([])
+  const [categories, setCategories] = useState<AdminCategory[]>([])
   const [total, setTotal] = useState(0)
 
   // Every filter below narrows the same set; none of them replaces another.
@@ -78,7 +123,7 @@ export function AdminProduits() {
   const guard = useCallback(
     (e: unknown) => {
       if (e instanceof ApiError && e.code === 'UNAUTHORIZED') signOut()
-      setError(describeError(e))
+      setError(e)
     },
     [signOut],
   )
@@ -87,13 +132,16 @@ export function AdminProduits() {
     if (!token) return
     try {
       setError(null)
+      setListLoading(true)
       const r = await adminApi.listProducts(token, { ...(q ? { q } : {}), sort, limit: 100 })
       setProducts(r.data)
       setTotal(r.pagination.total)
     } catch (e) {
       guard(e)
+    } finally {
+      setListLoading(false)
     }
-  }, [token, q, sort, guard])
+  }, [token, q, sort, guard, reloadKey])
 
   useEffect(() => {
     void refresh()
@@ -111,6 +159,19 @@ export function AdminProduits() {
   useEffect(() => {
     void refreshTypes()
   }, [refreshTypes])
+
+  const refreshCategories = useCallback(async () => {
+    if (!token) return
+    try {
+      setCategories(await adminApi.listCategories(token))
+    } catch {
+      // Same rule as the type list: a missing one must not block the page.
+    }
+  }, [token])
+
+  useEffect(() => {
+    void refreshCategories()
+  }, [refreshCategories])
 
   useEffect(() => {
     if (!token) return
@@ -240,21 +301,9 @@ export function AdminProduits() {
 
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
           <FilterRow label={t('products.arrival')}>
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              aria-label={t('products.arrival')}
-              className={FIELD}
-            />
+            <DateField value={from} onChange={setFrom} ariaLabel={t('products.arrival')} />
             <span className="text-meta text-ink-soft">{t('products.and')}</span>
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              aria-label={t('products.arrival')}
-              className={FIELD}
-            />
+            <DateField value={to} onChange={setTo} ariaLabel={t('products.arrival')} />
           </FilterRow>
 
           <FilterRow label={t('products.priceRange')}>
@@ -294,14 +343,23 @@ export function AdminProduits() {
         </p>
       )}
 
-      {error && (
-        <p className="rounded-md border border-rust/40 bg-rust/5 p-4 text-body text-rust">{error}</p>
+      {error !== null && (
+        <FetchError error={error} onRetry={() => setReloadKey((k) => k + 1)} />
       )}
+
+      {listLoading && error === null && <TableSkeleton rows={6} cols="lg:grid-cols-[1.5fr_100px_1fr_100px_80px_90px]" />}
+
+      {/* Sections live here rather than in their own nav item: there are only
+          ever a handful, and they are edited while looking at the products
+          that sit in them. */}
+      <RayonsPanel categories={categories} onChanged={refreshCategories} />
 
       {creating && (
         <ProductCreateForm
           types={types}
+          categories={categories}
           onTypesChanged={refreshTypes}
+          onCategoriesChanged={refreshCategories}
           onDone={async () => {
             setCreating(false)
             await refresh()
@@ -337,7 +395,7 @@ export function AdminProduits() {
                 <span className="block text-xs text-ink-soft">
                   {p.slug} · {p.category?.name ?? t('products.noCategory')} · {p.type?.name ?? t('products.noTypeShort')} ·{' '}
                   {p.variants.length} décl.
-                  {p.images.length > 0 && ` · ${p.images.length} photo(s)`}
+                  {(p.photoCount ?? p.images.length) > 0 && ` · ${p.photoCount ?? p.images.length} photo(s)`}
                 </span>
                 <span className="block text-xs text-ink-soft lg:hidden">
                   {p.supplier ?? 'fournisseur —'} · arrivé {fmtDate(p.arrivalDate, locale)}
@@ -366,7 +424,9 @@ export function AdminProduits() {
               <ProductDetail
                 product={p}
                 types={types}
+                categories={categories}
                 onTypesChanged={refreshTypes}
+                onCategoriesChanged={refreshCategories}
                 storageOn={storageOn === true}
                 onToggleActive={() => void toggleActive(p)}
                 onChanged={refresh}
@@ -394,12 +454,16 @@ export function AdminProduits() {
 
 function ProductCreateForm({
   types,
+  categories,
   onTypesChanged,
+  onCategoriesChanged,
   onDone,
   onError,
 }: {
   types: AdminProductType[]
+  categories: AdminCategory[]
   onTypesChanged: () => Promise<void>
+  onCategoriesChanged: () => Promise<void>
   onDone: () => Promise<void>
   onError: (e: unknown) => void
 }) {
@@ -409,8 +473,10 @@ function ProductCreateForm({
   const [description, setDescription] = useState('')
   const [basePrice, setBasePrice] = useState('')
   const [supplier, setSupplier] = useState('')
+  const [gender, setGender] = useState<Gender | null>(null)
   const [arrival, setArrival] = useState('')
   const [typeId, setTypeId] = useState<number | null>(null)
+  const [categoryId, setCategoryId] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
 
   async function submit(e: React.FormEvent) {
@@ -423,13 +489,16 @@ function ProductCreateForm({
         description: description.trim(),
         basePrice: Number(basePrice),
         supplier: supplier.trim() || null,
+        gender,
         arrivalDate: arrival || null,
         typeId,
+        categoryId,
       })
       setName('')
       setDescription('')
       setBasePrice('')
       setSupplier('')
+      setGender(null)
       setArrival('')
       setTypeId(null)
       await onDone()
@@ -466,19 +535,28 @@ function ProductCreateForm({
         onError={onError}
       />
 
+      {/* Section, not gender — separate axes, and the Genre field below
+          answers the other one. */}
+      <CategoryPicker
+        categories={categories}
+        value={categoryId}
+        onChange={setCategoryId}
+        onCategoriesChanged={onCategoriesChanged}
+        onError={onError}
+      />
+
       <div className="grid gap-4 lg:grid-cols-2">
         <label className="flex flex-col gap-1.5">
           <span className={LABEL}>{t('products.supplier')} {t('common.optional')}</span>
           <input className={FIELD} value={supplier} onChange={(e) => setSupplier(e.target.value)} />
         </label>
+      </div>
+
+      <div className="grid gap-4">
+        <GenderPicker value={gender} onChange={setGender} />
         <label className="flex flex-col gap-1.5">
           <span className={LABEL}>{t('products.arrivedOn')} {t('common.optional')}</span>
-          <input
-            type="date"
-            className={FIELD}
-            value={arrival}
-            onChange={(e) => setArrival(e.target.value)}
-          />
+          <DateField value={arrival} onChange={setArrival} />
         </label>
       </div>
 
@@ -509,7 +587,9 @@ function ProductCreateForm({
 function ProductDetail({
   product,
   types,
+  categories,
   onTypesChanged,
+  onCategoriesChanged,
   storageOn,
   onToggleActive,
   onChanged,
@@ -518,7 +598,9 @@ function ProductDetail({
 }: {
   product: AdminProduct
   types: AdminProductType[]
+  categories: AdminCategory[]
   onTypesChanged: () => Promise<void>
+  onCategoriesChanged: () => Promise<void>
   storageOn: boolean
   onToggleActive: () => void
   onChanged: () => Promise<void>
@@ -531,11 +613,13 @@ function ProductDetail({
       <ProductEditForm
         product={product}
         types={types}
+        categories={categories}
         onTypesChanged={onTypesChanged}
+        onCategoriesChanged={onCategoriesChanged}
         onChanged={onChanged}
         onError={onError}
       />
-      <ImageManager product={product} enabled={storageOn} onChanged={onChanged} onError={onError} />
+      <ImageManager product={product} enabled={storageOn} onError={onError} />
       <VariantEditor product={product} onChanged={onChanged} onError={onError} />
       <DeleteProduct product={product} onDeleted={onDeleted} onError={onError} />
     </div>
@@ -554,7 +638,7 @@ function ActiveToggle({ product, onToggle }: { product: AdminProduct; onToggle: 
         role="switch"
         aria-checked={on}
         onClick={onToggle}
-        className={`inline-flex items-center gap-2.5 rounded-pill border px-3 py-2 text-meta font-semibold ${
+        className={`min-h-11 inline-flex items-center gap-2.5 rounded-pill border px-3 py-2 text-meta font-semibold ${
           on ? 'border-green bg-green text-cream' : 'border-line text-ink-soft'
         }`}
       >
@@ -588,13 +672,17 @@ function ActiveToggle({ product, onToggle }: { product: AdminProduct; onToggle: 
 function ProductEditForm({
   product,
   types,
+  categories,
   onTypesChanged,
+  onCategoriesChanged,
   onChanged,
   onError,
 }: {
   product: AdminProduct
   types: AdminProductType[]
+  categories: AdminCategory[]
   onTypesChanged: () => Promise<void>
+  onCategoriesChanged: () => Promise<void>
   onChanged: () => Promise<void>
   onError: (e: unknown) => void
 }) {
@@ -604,22 +692,34 @@ function ProductEditForm({
   const [basePrice, setBasePrice] = useState(String(product.basePrice))
   const [description, setDescription] = useState(product.description)
   const [supplier, setSupplier] = useState(product.supplier ?? '')
+  const [gender, setGender] = useState<Gender | null>(product.gender)
+  const [nameAr, setNameAr] = useState(product.nameAr ?? '')
+  const [descAr, setDescAr] = useState(product.descriptionAr ?? '')
   const [arrival, setArrival] = useState(toDateInput(product.arrivalDate))
   const [typeId, setTypeId] = useState<number | null>(product.type?.id ?? null)
+  const [categoryId, setCategoryId] = useState<number | null>(product.categoryId)
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState(false)
 
   const price = Number(basePrice)
   const supplierChanged = supplier.trim() !== (product.supplier ?? '')
+  const genderChanged = gender !== product.gender
+  const nameArChanged = nameAr.trim() !== (product.nameAr ?? '')
+  const descArChanged = descAr.trim() !== (product.descriptionAr ?? '')
   const arrivalChanged = arrival !== toDateInput(product.arrivalDate)
   const typeChanged = typeId !== (product.type?.id ?? null)
+  const categoryChanged = categoryId !== product.categoryId
   const dirty =
     name !== product.name ||
     price !== product.basePrice ||
     description !== product.description ||
     supplierChanged ||
+    genderChanged ||
+    nameArChanged ||
+    descArChanged ||
     arrivalChanged ||
-    typeChanged
+    typeChanged ||
+    categoryChanged
   const valid = name.trim().length >= 2 && description.trim().length >= 5 && Number.isFinite(price)
 
   async function save(e: React.FormEvent) {
@@ -636,8 +736,12 @@ function ProductEditForm({
         ...(description !== product.description ? { description: description.trim() } : {}),
         // Empty string clears the column rather than writing "".
         ...(supplierChanged ? { supplier: supplier.trim() || null } : {}),
+        ...(genderChanged ? { gender } : {}),
+        ...(nameArChanged ? { nameAr: nameAr.trim() || null } : {}),
+        ...(descArChanged ? { descriptionAr: descAr.trim() || null } : {}),
         ...(arrivalChanged ? { arrivalDate: arrival || null } : {}),
         ...(typeChanged ? { typeId } : {}),
+        ...(categoryChanged ? { categoryId } : {}),
       })
       setSaved(true)
       await onChanged()
@@ -653,6 +757,9 @@ function ProductEditForm({
     setBasePrice(String(product.basePrice))
     setDescription(product.description)
     setSupplier(product.supplier ?? '')
+    setGender(product.gender)
+    setNameAr(product.nameAr ?? '')
+    setDescAr(product.descriptionAr ?? '')
     setArrival(toDateInput(product.arrivalDate))
     setTypeId(product.type?.id ?? null)
     setSaved(false)
@@ -662,27 +769,29 @@ function ProductEditForm({
     <form onSubmit={save} className="flex flex-col gap-4">
       <span className="text-label font-semibold uppercase text-ink-soft">{t('products.sheet')}</span>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <label className="flex flex-col gap-1.5">
-          <span className={LABEL}>{t('products.name')}</span>
-          <input className={FIELD} value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className={LABEL}>{t('products.basePrice')}</span>
-          <input
-            className={FIELD}
-            inputMode="numeric"
-            value={basePrice}
-            onChange={(e) => setBasePrice(e.target.value.replace(/\D/g, ''))}
-          />
-        </label>
-      </div>
+      <label className="flex flex-col gap-1.5 lg:max-w-[280px]">
+        <span className={LABEL}>{t('products.basePrice')}</span>
+        <input
+          className={FIELD}
+          inputMode="numeric"
+          value={basePrice}
+          onChange={(e) => setBasePrice(e.target.value.replace(/\D/g, ''))}
+        />
+      </label>
 
       <TypePicker
         types={types}
         value={typeId}
         onChange={setTypeId}
         onTypesChanged={onTypesChanged}
+        onError={onError}
+      />
+
+      <CategoryPicker
+        categories={categories}
+        value={categoryId}
+        onChange={setCategoryId}
+        onCategoriesChanged={onCategoriesChanged}
         onError={onError}
       />
 
@@ -700,29 +809,55 @@ function ProductEditForm({
           <span className={LABEL}>{t('products.arrivedOn')}</span>
           {/* Entered by hand, never auto-filled: this is the day the cartons
               landed, which is not the day the product was catalogued. */}
+          <DateField value={arrival} onChange={setArrival} />
+        </label>
+      </div>
+
+      <GenderPicker value={gender} onChange={setGender} />
+
+      {/* Arabic content, written by hand. Empty means the storefront shows the
+          French value — never a blank product name. */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <label className="flex flex-col gap-1.5">
+          <span className={LABEL}>{t('products.nameFr')}</span>
+          <input className={FIELD} value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className={LABEL}>{t('products.nameAr')} {t('common.optional')}</span>
           <input
-            type="date"
-            className={FIELD}
-            value={arrival}
-            onChange={(e) => setArrival(e.target.value)}
+            dir="rtl"
+            className={`${FIELD} font-kufi`}
+            value={nameAr}
+            onChange={(e) => setNameAr(e.target.value)}
           />
         </label>
       </div>
 
-      <label className="flex flex-col gap-1.5">
-        <span className={LABEL}>{t('products.description')}</span>
-        <textarea
-          className={`${FIELD} min-h-[100px] resize-y`}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-      </label>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <label className="flex flex-col gap-1.5">
+          <span className={LABEL}>{t('products.description')}</span>
+          <textarea
+            className={`${FIELD} min-h-[100px] resize-y`}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className={LABEL}>{t('products.descriptionAr')} {t('common.optional')}</span>
+          <textarea
+            dir="rtl"
+            className={`${FIELD} min-h-[100px] resize-y font-kufi`}
+            value={descAr}
+            onChange={(e) => setDescAr(e.target.value)}
+          />
+        </label>
+      </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="submit"
           disabled={busy || !dirty || !valid}
-          className="rounded-pill border border-green bg-green px-6 py-2.5 text-meta font-semibold text-cream disabled:border-line disabled:bg-line disabled:text-white"
+          className="min-h-11 rounded-pill border border-green bg-green px-6 py-2.5 text-meta font-semibold text-cream disabled:border-line disabled:bg-line disabled:text-white"
         >
           {busy ? t('products.saving') : t('products.save')}
         </button>
@@ -749,84 +884,139 @@ function ProductEditForm({
 function ImageManager({
   product,
   enabled,
-  onChanged,
   onError,
 }: {
   product: AdminProduct
   enabled: boolean
-  onChanged: () => Promise<void>
   onError: (e: unknown) => void
 }) {
   const { t } = useT()
   const { token } = useAuth()
-  const [busy, setBusy] = useState(false)
+  const [galleries, setGalleries] = useState<ColourGallery[] | null>(null)
+  const [busyColour, setBusyColour] = useState<string | null>(null)
 
-  async function upload(file: File) {
+  const load = useCallback(async () => {
     if (!token) return
-    setBusy(true)
+    try {
+      setGalleries(await adminApi.listPhotos(token, product.id))
+    } catch (e) {
+      onError(e)
+    }
+  }, [token, product.id, onError])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  /** Every colour the product is made in, plus the shared set at the front. */
+  const strips = useMemo(() => {
+    const colours = [...new Set(product.variants.map((v) => v.color))].sort((a, b) =>
+      a.localeCompare(b, 'fr'),
+    )
+    return [null, ...colours] as Array<string | null>
+  }, [product.variants])
+
+  const imagesFor = useCallback(
+    (colour: string | null) => galleries?.find((g) => g.color === colour)?.images ?? [],
+    [galleries],
+  )
+
+  async function upload(file: File, colour: string | null) {
+    if (!token) return
+    setBusyColour(colour ?? '')
     try {
       // Three steps: ask the server for a signed URL, PUT the bytes straight to
-      // Supabase, then tell the server which path to record.
+      // Supabase, then tell the server which path and colour to record.
       const signed = await adminApi.signUpload(token, product.id, file.name)
       await uploadToSignedUrl(signed.signedUrl, file)
-      await adminApi.attachImage(token, product.id, signed.path)
-      await onChanged()
+      setGalleries(await adminApi.addPhoto(token, product.id, signed.path, colour))
     } catch (e) {
       onError(e)
     } finally {
-      setBusy(false)
+      setBusyColour(null)
+    }
+  }
+
+  async function remove(imageId: number) {
+    if (!token) return
+    try {
+      setGalleries(await adminApi.removePhoto(token, product.id, imageId))
+    } catch (e) {
+      onError(e)
     }
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <span className="text-label font-semibold uppercase text-ink-soft">{t('products.photos')}</span>
-      <div className="flex flex-wrap gap-3">
-        {product.images.map((url) => (
-          <div key={url} className="flex flex-col gap-1">
-            {/* Arch + glow: the design reserves both for product photography. */}
-            <img
-              src={url}
-              alt=""
-              className="h-[120px] w-[92px] rounded-arch border border-cream-edge bg-glow object-cover"
-            />
-            <button
-              type="button"
-              onClick={async () => {
-                if (!token) return
-                try {
-                  await adminApi.detachImage(token, product.id, url)
-                  await onChanged()
-                } catch (e) {
-                  onError(e)
-                }
-              }}
-              className="text-xs text-ink-soft hover:text-rust"
-            >
-              {t('products.removePhoto')}
-            </button>
-          </div>
-        ))}
-
-        <label
-          className={`grid h-[120px] w-[92px] place-items-center rounded-sm border border-dashed border-line text-center text-xs ${
-            enabled ? 'cursor-pointer text-green' : 'cursor-not-allowed text-line'
-          }`}
-        >
-          {busy ? t('products.uploading') : enabled ? t('products.addPhoto') : '—'}
-          <input
-            type="file"
-            accept="image/*"
-            disabled={!enabled || busy}
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) void upload(f)
-              e.target.value = ''
-            }}
-          />
-        </label>
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-1">
+        <span className="text-label font-semibold uppercase text-ink-soft">
+          {t('products.photos')}
+        </span>
+        <span className="text-meta text-ink-soft">{t('products.photosHint')}</span>
       </div>
+
+      {strips.map((colour) => {
+        const images = imagesFor(colour)
+        const busy = busyColour === (colour ?? '')
+        return (
+          <div key={colour ?? '__shared'} className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              {colour !== null && (
+                <span
+                  aria-hidden
+                  className="h-4 w-4 rounded-pill border border-line"
+                  style={{ background: swatch(colour) }}
+                />
+              )}
+              <span className="text-meta font-semibold">
+                {colour ?? t('products.sharedPhotos')}
+              </span>
+              {colour === null && images.length === 0 && product.images.length > 0 && (
+                <span className="text-xs text-ink-soft">{t('products.legacyPhotos')}</span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              {images.map((img) => (
+                <div key={img.id} className="flex flex-col gap-1">
+                  {/* Arch + glow: the design reserves both for product photography. */}
+                  <img
+                    src={img.url}
+                    alt=""
+                    className="h-[120px] w-[92px] rounded-arch border border-cream-edge bg-glow object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void remove(img.id)}
+                    className="min-h-11 text-xs text-ink-soft hover:text-rust"
+                  >
+                    {t('products.removePhoto')}
+                  </button>
+                </div>
+              ))}
+
+              <label
+                className={`grid h-[120px] w-[92px] place-items-center rounded-sm border border-dashed border-line text-center text-xs ${
+                  enabled ? 'cursor-pointer text-green' : 'cursor-not-allowed text-line'
+                }`}
+              >
+                {busy ? t('products.uploading') : enabled ? t('products.addPhoto') : '—'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={!enabled || busy}
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) void upload(f, colour)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -894,7 +1084,7 @@ function VariantEditor({
                 const next = Number(e.target.value)
                 if (next !== v.stock) void saveStock(v, next)
               }}
-              className={`w-[90px] rounded-sm border bg-field px-2 py-1.5 text-end text-sm outline-none focus:border-green ${
+              className={`w-[90px] rounded-sm border bg-field min-h-11 px-2 text-end text-sm outline-none focus:border-green ${
                 v.stock === 0 ? 'border-rust text-rust' : 'border-line'
               }`}
             />
@@ -935,14 +1125,14 @@ function VariantEditor({
             <input
               value={draft[k]}
               onChange={(e) => setDraft({ ...draft, [k]: e.target.value })}
-              className="w-[110px] rounded-sm border border-line bg-field px-2 py-1.5 text-sm outline-none focus:border-green"
+              className="w-[110px] rounded-sm border border-line bg-field min-h-11 px-2 text-sm outline-none focus:border-green"
             />
           </label>
         ))}
         <button
           type="submit"
           disabled={!draft.size || !draft.color || !draft.sku}
-          className="rounded-pill border border-green px-4 py-2 text-meta font-semibold text-green disabled:border-line disabled:text-line"
+          className="min-h-11 rounded-pill border border-green px-4 py-2 text-meta font-semibold text-green disabled:border-line disabled:text-line"
         >
           {t('products.add')}
         </button>
@@ -999,7 +1189,7 @@ function DeleteProduct({
         <button
           type="button"
           onClick={() => setArming(true)}
-          className="rounded-pill border border-rust px-4 py-2 text-meta font-semibold text-rust"
+          className="min-h-11 rounded-pill border border-rust px-4 py-2 text-meta font-semibold text-rust"
         >
           {t('products.delete')}
         </button>
@@ -1032,7 +1222,7 @@ function DeleteProduct({
           type="button"
           disabled={!matches || busy}
           onClick={() => void remove()}
-          className="rounded-pill border border-rust bg-rust px-5 py-2.5 text-meta font-semibold text-cream disabled:border-line disabled:bg-line disabled:text-white"
+          className="min-h-11 rounded-pill border border-rust bg-rust px-5 py-2.5 text-meta font-semibold text-cream disabled:border-line disabled:bg-line disabled:text-white"
         >
           {busy ? t('products.deleting') : t('products.deleteForever')}
         </button>
@@ -1116,7 +1306,7 @@ function TypePicker({
             type="button"
             disabled={busy || name.trim().length < 2}
             onClick={() => void create()}
-            className="rounded-pill border border-green bg-green px-4 py-2 text-meta font-semibold text-cream disabled:border-line disabled:bg-line disabled:text-white"
+            className="min-h-11 rounded-pill border border-green bg-green px-4 py-2 text-meta font-semibold text-cream disabled:border-line disabled:bg-line disabled:text-white"
           >
             {busy ? '…' : t('products.create')}
           </button>
@@ -1148,7 +1338,7 @@ function TypePicker({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="whitespace-nowrap rounded-pill border border-green px-3 py-2 text-meta font-semibold text-green"
+            className="min-h-11 whitespace-nowrap rounded-pill border border-green px-3 py-2 text-meta font-semibold text-green"
           >
             {t('products.newType')}
           </button>

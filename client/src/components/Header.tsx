@@ -9,8 +9,11 @@ const PHONE_DISPLAY = '0561 20 44 90'
 const PHONE_TEL = '0561204490'
 
 const NAV = [
-  { to: '/?category=femme', key: 'nav.femme' },
-  { to: '/?category=homme', key: 'nav.homme' },
+  // Gender, not category: Category is now seasonal sections only, and a unisex
+  // product must reach both of these — which `?gender=` does and `?category=`
+  // never could.
+  { to: '/?gender=FEMME', key: 'nav.femme' },
+  { to: '/?gender=HOMME', key: 'nav.homme' },
   { to: '/?category=nouveautes', key: 'nav.nouveautes' },
   { to: '/livraison', key: 'nav.livraison' },
   { to: '/contact', key: 'nav.contact' },
@@ -98,7 +101,7 @@ export function Header() {
           <LangToggle />
           <Link
             to="/commande"
-            className="rounded-pill border border-green px-[18px] py-[9px] text-green hover:bg-green hover:text-cream"
+            className="inline-flex min-h-11 items-center rounded-pill border border-green px-[18px] py-[9px] text-green hover:bg-green hover:text-cream"
           >
             {t('nav.cart')} · {count}
           </Link>

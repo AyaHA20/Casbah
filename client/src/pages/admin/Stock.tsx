@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ApiError, adminApi, describeError, type LowStockRow, type StockPayload } from '../../lib/api'
+import { ApiError, adminApi, type LowStockRow, type StockPayload } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
+import { FetchError } from '../../components/FetchError'
+import { TableSkeleton } from '../../components/Skeleton'
 import { bySize } from '../../lib/format'
 import { Ltr, useT } from '../../lib/i18n'
 import {
@@ -25,7 +27,9 @@ export function AdminStock() {
   const { t, locale } = useT()
   const { token, signOut } = useAuth()
   const [payload, setPayload] = useState<StockPayload | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<unknown>(null)
+  const [listLoading, setListLoading] = useState(true)
+  const [reloadKey, setReloadKey] = useState(0)
 
   // Opens on "what am I about to run out of", which is the question the page exists for.
   const [mode, setMode] = useState<Mode>('low')
@@ -38,7 +42,7 @@ export function AdminStock() {
   const guard = useCallback(
     (e: unknown) => {
       if (e instanceof ApiError && e.code === 'UNAUTHORIZED') signOut()
-      setError(describeError(e))
+      setError(e)
     },
     [signOut],
   )
@@ -47,11 +51,14 @@ export function AdminStock() {
     if (!token) return
     try {
       setError(null)
+      setListLoading(true)
       setPayload(await adminApi.lowStock(token))
     } catch (e) {
       guard(e)
+    } finally {
+      setListLoading(false)
     }
-  }, [token, guard])
+  }, [token, guard, reloadKey])
 
   useEffect(() => {
     void refresh()
@@ -177,9 +184,11 @@ export function AdminStock() {
         />
       </div>
 
-      {error && (
-        <p className="rounded-md border border-rust/40 bg-rust/5 p-4 text-body text-rust">{error}</p>
+      {error !== null && (
+        <FetchError error={error} onRetry={() => setReloadKey((k) => k + 1)} />
       )}
+
+      {listLoading && error === null && <TableSkeleton rows={6} cols="lg:grid-cols-[1.8fr_80px_1fr_150px_100px]" />}
 
       {/* ---- Table ---- */}
       <div className="flex flex-col">
@@ -219,7 +228,7 @@ export function AdminStock() {
                 const next = Number(e.target.value)
                 if (next !== r.stock) void save(r, next)
               }}
-              className={`w-[90px] justify-self-end rounded-sm border bg-field px-2 py-1.5 text-end text-sm outline-none focus:border-green ${
+              className={`w-[90px] justify-self-end rounded-sm border bg-field min-h-11 px-2 text-end text-sm outline-none focus:border-green ${
                 r.stock === 0 ? 'border-rust font-semibold text-rust' : 'border-line'
               }`}
             />

@@ -23,6 +23,18 @@ enum Carrier {
   OTHER // the shop's own courier, or an unspecified one
 }
 
+// Who the garment is cut for. Separate from Category because Category is how
+// the shop merchandises ("Nouveautés" is not a gender) and because a unisex
+// product should not have to be filed as one or the other.
+//
+// UNISEXE is not a third bucket on the storefront: it appears under BOTH the
+// Femme and Homme filters.
+enum Gender {
+  FEMME
+  HOMME
+  UNISEXE
+}
+
 enum OrderStatus {
   PENDING
   CONFIRMED
@@ -35,9 +47,11 @@ enum OrderStatus {
 // ------------------------------------------------------------- catalogue
 
 model Category {
-  id   Int    @id @default(autoincrement())
-  name String
-  slug String @unique
+  id     Int     @id @default(autoincrement())
+  name   String
+  slug   String  @unique
+  // Shown on every product card, so it needs Arabic too.
+  nameAr String?
 
   products Product[]
 }
@@ -46,9 +60,11 @@ model Category {
 // Category=Femme AND type=robe. Category is how the shop merchandises;
 // type is what the customer actually filters on.
 model ProductType {
-  id   Int    @id @default(autoincrement())
-  name String
-  slug String @unique
+  id     Int     @id @default(autoincrement())
+  name   String
+  slug   String  @unique
+  // Shown in the customer filter bar.
+  nameAr String?
 
   products Product[]
 }
@@ -72,14 +88,24 @@ model Product {
   supplier    String?
   arrivalDate DateTime?
 
+  // Arabic content, written by hand — never machine-translated.
+  // Empty falls back to the French field; slug stays derived from `name`,
+  // so existing links keep working after a translation is added.
+  nameAr        String?
+  descriptionAr String?
+
+  // Optional: existing products have none until set by hand.
+  gender Gender?
+
   // SetNull: shop owners reorganise categories. Deleting one leaves its
   // products uncategorised rather than blocking the delete until every product
   // has been moved by hand. Uncategorised is recoverable; blocked is not.
-  category Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   // SetNull for the same reason as category: deleting a type should never
   // block, and an untyped product is recoverable.
-  type     ProductType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  type     ProductType?   @relation(fields: [typeId], references: [id], onDelete: SetNull)
   variants Variant[]
+  photos   ProductImage[]
 
   // slug is already @unique -> Postgres builds a unique B-tree index for it,
   // so an explicit @@index([slug]) would just be a duplicate. categoryId is a
@@ -87,6 +113,25 @@ model Product {
   @@index([categoryId])
   @@index([typeId])
   @@index([active])
+}
+
+// Photos attached to a COLOUR, not a variant: a customer picking "Gris"
+// expects the grey garment, but S/M/L of that colour share one photo set.
+//
+// `color` is a plain string, not a relation, because colour is not its own
+// table -- it lives on Variant and repeats across sizes. Null means the shared
+// set used by colours that have no photos of their own.
+model ProductImage {
+  id        Int     @id @default(autoincrement())
+  productId Int
+  color     String?
+  url       String
+  position  Int     @default(0) // owner-controlled order within a colour
+
+  // Cascade like Variant: images are part of the product, not standalone.
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, color])
 }
 
 model Variant {

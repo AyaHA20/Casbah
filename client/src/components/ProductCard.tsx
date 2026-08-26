@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { ProductListItem } from '../lib/api'
-import { useT } from '../lib/i18n'
+import { localized, useT } from '../lib/i18n'
 import { fmtDA } from '../lib/format'
 
 export function ProductCard({ product }: { product: ProductListItem }) {
@@ -12,7 +12,7 @@ export function ProductCard({ product }: { product: ProductListItem }) {
       {/* The arch is reserved for photos. Top corners only, bottom at 3px. */}
       <div className="relative h-[210px] overflow-hidden rounded-arch border border-cream-edge bg-glow lg:h-[300px] lg:rounded-arch-md">
         {image ? (
-          <img src={image} alt={product.name} className="h-full w-full object-cover" />
+          <img src={image} alt={localized(product.name, product.nameAr, lang)} className="h-full w-full object-cover" />
         ) : (
           <span className="absolute inset-x-0 bottom-4 text-center text-[11px] uppercase tracking-[0.1em] text-ink-soft">
             {t('product.comingPhoto')}
@@ -26,8 +26,13 @@ export function ProductCard({ product }: { product: ProductListItem }) {
       </div>
 
       <div>
-        <div className="text-sm font-semibold leading-[1.3] group-hover:text-green">{product.name}</div>
-        <div className="pt-0.5 text-xs text-ink-soft">{product.category?.name ?? t('products.noCategory')}</div>
+        <div className="text-sm font-semibold leading-[1.3] group-hover:text-green">{localized(product.name, product.nameAr, lang)}</div>
+        {/* Gender, not category: Category is a shop section (Nouveautés,
+            Soldes) and says nothing about who the garment is for. Nothing is
+            rendered when unset — an empty line reads as a fault. */}
+        {product.gender && (
+          <div className="pt-0.5 text-xs text-ink-soft">{t(`gender.${product.gender}`)}</div>
+        )}
         <div className="pt-[5px] font-display text-[17px] font-bold text-green lg:text-[20px]">
           {fmtDA(product.basePrice, lang)}
         </div>

@@ -155,7 +155,7 @@ export function OrderPanel({ order, loading, onStatusChange }: Props) {
                   setConfirming(null)
                   void change(next)
                 }}
-                className="rounded-pill border border-rust bg-rust px-4 py-2 text-meta font-semibold text-cream disabled:border-line disabled:bg-line"
+                className="rounded-pill border border-rust bg-rust min-h-11 px-4 text-meta font-semibold text-cream disabled:border-line disabled:bg-line"
               >
                 {t('orders.terminalConfirm')}
               </button>

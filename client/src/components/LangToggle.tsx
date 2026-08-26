@@ -22,7 +22,7 @@ export function LangToggle({ compact = false }: { compact?: boolean }) {
           onClick={() => setLang(code)}
           aria-pressed={lang === code}
           lang={code}
-          className={`px-2.5 py-1 font-semibold ${
+          className={`min-h-11 px-3.5 font-semibold ${
             lang === code ? 'bg-green text-cream' : 'text-ink-soft hover:text-ink'
           }`}
         >

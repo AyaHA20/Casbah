@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { api, type Product, type Variant } from '../lib/api'
+import { api, type Product, type Variant, resolveGallery } from '../lib/api'
 import { bySize, fmtDA, swatch } from '../lib/format'
 import { useCart } from '../lib/cart'
-import { useT } from '../lib/i18n'
+import { FetchError } from '../components/FetchError'
+import { ProductDetailSkeleton } from '../components/Skeleton'
+import { localized, useT } from '../lib/i18n'
 
 export function Produit() {
   const { t, lang } = useT()
@@ -12,11 +14,13 @@ export function Produit() {
   const { add } = useCart()
 
   const [product, setProduct] = useState<Product | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<unknown>(null)
+  const [reloadKey, setReloadKey] = useState(0)
   const [color, setColor] = useState<string | null>(null)
   const [size, setSize] = useState<string | null>(null)
   const [qty, setQty] = useState(1)
   const [added, setAdded] = useState(false)
+  const [imgIndex, setImgIndex] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -31,13 +35,13 @@ export function Produit() {
         setColor(firstAvailable?.color ?? null)
         setSize(firstAvailable?.size ?? null)
       })
-      .catch((e: Error) => {
-        if (!cancelled) setError(e.message)
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e)
       })
     return () => {
       cancelled = true
     }
-  }, [slug])
+  }, [slug, reloadKey])
 
   const colors = useMemo(
     () => [...new Set(product?.variants.map((v) => v.color) ?? [])],
@@ -49,26 +53,77 @@ export function Produit() {
     return product.variants.filter((v) => v.color === color).sort((a, b) => bySize(a.size, b.size))
   }, [product, color])
 
-  const selected = useMemo(
-    () => sizesForColor.find((v) => v.size === size) ?? null,
-    [sizesForColor, size],
+  /**
+   * Every size the product comes in, regardless of colour.
+   *
+   * Rendering only the sizes that exist in the current colour made the row
+   * silently change length when switching colour — a size that is simply not
+   * made in Gris looked identical to one that was never offered. Showing the
+   * full set and disabling what is unavailable keeps the row stable and says
+   * which is which.
+   */
+  const allSizes = useMemo(
+    () => [...new Set(product?.variants.map((v) => v.size) ?? [])].sort(bySize),
+    [product],
   )
 
-  if (error) {
+  /** The variant for a size in the CURRENT colour, or null if not made. */
+  const variantFor = useCallback(
+    (s: string) => sizesForColor.find((v) => v.size === s) ?? null,
+    [sizesForColor],
+  )
+
+  const selected = useMemo(
+    () => (size === null ? null : variantFor(size)),
+    [variantFor, size],
+  )
+
+  /**
+   * Switching colour keeps the chosen size when that colour is made in it.
+   *
+   * The swatch used to clear the size outright, which left the page showing
+   * "Indisponible" on a garment with stock — nothing was selected, but every
+   * size still looked clickable.
+   */
+  function pickColor(next: string) {
+    setColor(next)
+    setAdded(false)
+    setImgIndex(0)
+    const inNext = (product?.variants ?? []).filter((v) => v.color === next)
+    const keep = size !== null && inNext.some((v) => v.size === size && v.stock > 0)
+    if (keep) return
+    const firstInStock = inNext.filter((v) => v.stock > 0).sort((a, b) => bySize(a.size, b.size))[0]
+    setSize(firstInStock?.size ?? null)
+    setQty(1)
+  }
+
+  /**
+   * Photos for the selected colour.
+   *
+   * Currently one set per product; when per-colour images land this is the only
+   * place that changes.
+   */
+  const gallery = useMemo(
+    () => resolveGallery(product?.galleries, product?.images ?? [], color),
+    [product, color],
+  )
+  const heroImage = gallery[Math.min(imgIndex, Math.max(0, gallery.length - 1))]
+
+  if (error !== null) {
     return (
       <div className="mx-auto max-w-shell px-gutter py-section lg:px-gutter-lg">
         <h1 className="text-h1">{t('product.notFound')}</h1>
-        <p className="mt-4 text-body text-ink-soft">{error}</p>
-        <Link to="/" className="mt-6 inline-block text-green hover:text-rust">
+        <div className="mt-5">
+          <FetchError error={error} onRetry={() => setReloadKey((k) => k + 1)} />
+        </div>
+        <Link to="/" className="mt-6 inline-block min-h-11 text-green hover:text-rust">
           <span className="inline-block rtl:-scale-x-100">←</span> {t('product.back')}
         </Link>
       </div>
     )
   }
 
-  if (!product) {
-    return <p className="px-gutter py-section text-center text-ink-soft">{t('common.loading')}</p>
-  }
+  if (!product) return <ProductDetailSkeleton />
 
   const price = selected?.price ?? product.basePrice
   const canAdd = selected !== null && selected.stock >= qty
@@ -99,7 +154,7 @@ export function Produit() {
           {' / '}
           {product.category ? (
             <Link to={`/?category=${product.category.slug}`} className="hover:text-green">
-              {product.category.name}
+              {localized(product.category.name, product.category.nameAr, lang)}
             </Link>
           ) : (
             <span>{t('products.noCategory')}</span>
@@ -112,28 +167,53 @@ export function Produit() {
       <div className="mx-auto max-w-shell px-gutter py-5 lg:grid lg:grid-cols-[1fr_460px] lg:items-start lg:gap-10 lg:px-gutter-lg lg:py-14">
         {/* ---------- Photo ---------- */}
         <div>
-          <div className="flex h-[400px] items-end justify-center rounded-arch border border-cream-edge bg-glow pb-4 lg:h-[720px] lg:rounded-arch-lg">
-            <span className="text-[11px] uppercase tracking-[0.1em] text-ink-soft">
-              {t('product.photoAlt')}
-            </span>
-          </div>
-          <div className="grid grid-cols-4 gap-2 pt-[10px]">
-            {[0, 1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className={`h-16 rounded-sm border bg-glow lg:h-[110px] ${
-                  i === 0 ? 'border-green' : 'border-line'
-                }`}
+          {/* The arch is reserved for photos: top corners only, bottom at 3px. */}
+          <div className="relative flex h-[400px] items-end justify-center overflow-hidden rounded-arch border border-cream-edge bg-glow pb-4 lg:h-[720px] lg:rounded-arch-lg">
+            {heroImage ? (
+              <img
+                src={heroImage}
+                alt={localized(product.name, product.nameAr, lang)}
+                className="absolute inset-0 h-full w-full object-cover"
               />
-            ))}
+            ) : (
+              <span className="text-[11px] uppercase tracking-[0.1em] text-ink-soft">
+                {t('product.comingPhoto')}
+              </span>
+            )}
           </div>
+
+          {gallery.length > 1 && (
+            <div className="grid grid-cols-4 gap-2 pt-[10px]">
+              {gallery.slice(0, 4).map((url, i) => (
+                <button
+                  key={url}
+                  type="button"
+                  onClick={() => setImgIndex(i)}
+                  aria-label={`${t('product.photoAlt')} ${i + 1}`}
+                  aria-pressed={i === imgIndex}
+                  className={`h-16 overflow-hidden rounded-sm border bg-glow lg:h-[110px] ${
+                    i === imgIndex ? 'border-green' : 'border-line'
+                  }`}
+                >
+                  <img src={url} alt="" className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ---------- Details ---------- */}
         <div className="flex flex-col gap-5 py-6 lg:gap-[26px] lg:py-0">
           <div className="flex flex-col gap-2">
             <span className="wordmark text-[11px] text-green lg:text-meta">
-              {product.category?.name ?? t('products.noCategory')} · {t('product.ref')} {selected?.sku ?? product.slug}
+              {product.category
+                ? localized(product.category.name, product.category.nameAr, lang)
+                : t('products.noCategory')}
+              {/* Always rendered when set: Category is now seasonal sections
+                  only, so it can no longer duplicate the gender. Label only —
+                  never a link, so it cannot become a browse bucket. */}
+              {product.gender ? <> · {t(`gender.${product.gender}`)}</> : null}{' '}
+              · {t('product.ref')} {selected?.sku ?? product.slug}
             </span>
             <h1 className="text-[38px] leading-[0.94] lg:text-[60px] lg:leading-[0.92]">
               {product.name}
@@ -173,13 +253,9 @@ export function Produit() {
                     type="button"
                     title={c}
                     aria-label={c}
-                    onClick={() => {
-                      setColor(c)
-                      setSize(null)
-                      setAdded(false)
-                    }}
+                    onClick={() => pickColor(c)}
                     style={{ background: swatch(c) }}
-                    className={`h-[34px] w-[34px] rounded-pill lg:h-[38px] lg:w-[38px] ${
+                    className={`h-11 w-11 rounded-pill lg:h-[38px] lg:w-[38px] ${
                       on
                         ? 'shadow-[0_0_0_2px_var(--color-cream),0_0_0_3px_var(--color-green)]'
                         : 'border border-line'
@@ -197,33 +273,39 @@ export function Produit() {
               <span className="text-xs text-green">{t('product.sizeGuide')} <span className="inline-block rtl:-scale-x-100">↗</span></span>
             </div>
             <div className="flex gap-2 lg:gap-[10px]">
-              {sizesForColor.map((v) => {
-                const on = v.size === size
-                const out = v.stock === 0
+              {allSizes.map((sz) => {
+                const v = variantFor(sz)
+                const on = v !== null && sz === size
+                // Not made in this colour, or made and sold out — both are
+                // unbuyable, and both must LOOK unbuyable rather than merely
+                // refusing the click.
+                const unavailable = v === null || v.stock === 0
                 return (
                   <button
-                    key={v.id}
+                    key={sz}
                     type="button"
-                    disabled={out}
+                    disabled={unavailable}
+                    aria-pressed={on}
+                    title={v === null ? t('product.notInColor') : undefined}
                     onClick={() => {
-                      setSize(v.size)
+                      setSize(sz)
                       setQty(1)
                       setAdded(false)
                     }}
                     className={`min-w-[52px] flex-1 rounded-sm border py-[13px] text-center text-[15px] font-semibold lg:min-w-[62px] lg:flex-none lg:px-5 ${
-                      out
+                      unavailable
                         ? 'cursor-not-allowed border-line text-line line-through'
                         : on
                           ? 'border-green bg-green text-cream'
                           : 'border-line text-ink hover:border-green'
                     }`}
                   >
-                    {v.size}
+                    {sz}
                   </button>
                 )
               })}
             </div>
-            {sizesForColor.some((v) => v.stock === 0) && (
+            {allSizes.some((sz) => { const v = variantFor(sz); return v === null || v.stock === 0 }) && (
               <span className="text-xs text-ink-soft">
                 {t('product.struckHint')}
               </span>

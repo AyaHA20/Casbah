@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { publicUrl } from '../lib/storage.js'
+import { cardImages, galleriesForProducts } from './product-images.service.js'
 
 /**
  * Owner-editable storefront settings.
@@ -122,19 +123,30 @@ export async function getStorefront() {
       slug: true,
       basePrice: true,
       images: true,
-      category: { select: { name: true, slug: true } },
-      type: { select: { name: true, slug: true } },
+      // Featured rows must carry the same fields as any other product card, or
+      // the Vitrine strip quietly diverges from the grid — the exact shape of
+      // the photo bug, where only this endpoint was left behind.
+      gender: true,
+      nameAr: true,
+      category: { select: { name: true, nameAr: true, slug: true } },
+      type: { select: { name: true, nameAr: true, slug: true } },
       variants: { select: { stock: true } },
     },
   })
 
   // findMany ignores the order of `in`, and the owner's sequence is the point.
   // A product retired since it was featured simply drops out.
+  const galleries = await galleriesForProducts(products.map((p) => p.id))
+
   const byId = new Map(products.map((p) => [p.id, p]))
   const featured = ids
     .map((id) => byId.get(id))
     .filter((p): p is NonNullable<typeof p> => p !== undefined)
-    .map(({ variants, ...p }) => ({ ...p, inStock: variants.some((v) => v.stock > 0) }))
+    .map(({ variants, ...p }) => ({
+      ...p,
+      images: cardImages(galleries.get(p.id), p.images),
+      inStock: variants.some((v) => v.stock > 0),
+    }))
 
   return { ...settings, featured }
 }

@@ -3,14 +3,13 @@ import { useAuth } from '../../lib/auth'
 import { LangToggle } from '../LangToggle'
 import { useT } from '../../lib/i18n'
 
-// The design's admin nav. Livraison has no admin page yet, so it stays inert
-// text rather than a link that goes nowhere.
+// The design's admin nav. Every item is a real page now.
 const NAV: Array<{ key: 'admin.orders' | 'admin.products' | 'admin.stock' | 'vitrine.title' | 'admin.shipping'; to: string | null }> = [
   { key: 'admin.orders', to: '/admin/commandes' },
   { key: 'admin.products', to: '/admin/produits' },
   { key: 'admin.stock', to: '/admin/stock' },
   { key: 'vitrine.title', to: '/admin/vitrine' },
-  { key: 'admin.shipping', to: null },
+  { key: 'admin.shipping', to: '/admin/livraison' },
 ]
 
 
@@ -60,7 +59,7 @@ export function AdminHeader({ now }: { now: Date }) {
             type="button"
             onClick={signOut}
             title={admin?.email ?? ''}
-            className="rounded-pill border border-line px-3 py-1.5 text-meta text-ink-soft hover:border-green hover:text-green"
+            className="rounded-pill border border-line min-h-11 px-4 text-meta text-ink-soft hover:border-green hover:text-green"
           >
             {t('admin.quit')}
           </button>

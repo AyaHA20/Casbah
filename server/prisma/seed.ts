@@ -102,9 +102,11 @@ const PRODUCT_TYPES: Array<{ name: string; slug: string }> = [
   { name: 'Survêtement', slug: 'survetement' },
 ]
 
+// Categories are seasonal / promotional sections of the shop, never gendered:
+// who a garment is for lives on Product.gender and nowhere else. The shop adds
+// its own (Soldes, Collection été, …) from the admin, so the seed ships only
+// the one every shop starts with.
 const CATEGORIES: Array<{ name: string; slug: string }> = [
-  { name: 'Femme', slug: 'femme' },
-  { name: 'Homme', slug: 'homme' },
   { name: 'Nouveautés', slug: 'nouveautes' },
 ]
 
@@ -147,7 +149,7 @@ const PRODUCTS: ProductSpec[] = [
     slug: 't-shirt-oversize-bab-el-oued',
     type: 't-shirt',
     sku: 'BEO',
-    category: 'homme',
+    category: 'nouveautes',
     basePrice: 2400,
     description:
       'T-shirt oversize en jersey de coton peigné, épaules tombantes et col côtelé renforcé. Un hommage graphique au quartier de Bab El Oued. Lavable en machine à 30°.',
@@ -162,7 +164,7 @@ const PRODUCTS: ProductSpec[] = [
     slug: 'robe-longue-zellige',
     type: 'robe',
     sku: 'ZLG',
-    category: 'femme',
+    category: 'nouveautes',
     basePrice: 5600,
     description:
       "Robe longue fluide à manches trois-quarts, imprimée d'un motif zellige revisité. Fendue sur le côté et doublée jusqu'aux genoux. Tombé souple en viscose.",
@@ -176,7 +178,7 @@ const PRODUCTS: ProductSpec[] = [
     slug: 'pantalon-cargo-alger-centre',
     type: 'pantalon',
     sku: 'ALC',
-    category: 'homme',
+    category: 'nouveautes',
     basePrice: 4200,
     description:
       'Pantalon cargo en toile de coton résistante, six poches dont deux à rabat, taille ajustable par cordon. Coupe droite légèrement fuselée à la cheville.',
@@ -191,7 +193,7 @@ const PRODUCTS: ProductSpec[] = [
     slug: 'veste-en-jean-sidi-fredj',
     type: 'veste',
     sku: 'SDF',
-    category: 'homme',
+    category: 'nouveautes',
     basePrice: 6800,
     description:
       "Veste en denim brut non délavé, boutons métal et double poche poitrine. Le denim se patine à l'usage et devient unique. Coupe classique, légèrement cintrée.",
@@ -205,7 +207,7 @@ const PRODUCTS: ProductSpec[] = [
     slug: 'chemise-en-lin-tipaza',
     type: 'chemise',
     sku: 'TPZ',
-    category: 'homme',
+    category: 'nouveautes',
     basePrice: 3900,
     description:
       "Chemise en lin lavé, col italien et coupe décontractée. Respirante et légère, pensée pour les étés du littoral. Le lin s'assouplit à chaque lavage.",
@@ -220,7 +222,7 @@ const PRODUCTS: ProductSpec[] = [
     slug: 'jupe-midi-mosaique',
     type: 'jupe',
     sku: 'MSQ',
-    category: 'femme',
+    category: 'nouveautes',
     basePrice: 3600,
     description:
       'Jupe midi taille haute à godets, imprimé mosaïque aux tons terracotta. Fermeture invisible sur le côté et doublure intégrale.',
@@ -263,7 +265,7 @@ const PRODUCTS: ProductSpec[] = [
     slug: 'top-cotele-amazigh',
     type: 'top',
     sku: 'AMZ',
-    category: 'femme',
+    category: 'nouveautes',
     basePrice: 2900,
     description:
       'Top court en maille côtelée stretch, bretelles fines et dos nu. Motif amazigh tissé sur la bordure. Se superpose facilement sous une chemise ouverte.',
@@ -278,7 +280,7 @@ const PRODUCTS: ProductSpec[] = [
     slug: 'survetement-djurdjura',
     type: 'survetement',
     sku: 'DJR',
-    category: 'homme',
+    category: 'nouveautes',
     basePrice: 6900,
     description:
       'Ensemble survêtement en molleton doux : veste zippée à capuche et pantalon à taille élastiquée. Coupe ample inspirée des sommets enneigés du Djurdjura.',
@@ -292,7 +294,7 @@ const PRODUCTS: ProductSpec[] = [
     slug: 'caftan-moderne-andalou',
     type: 'robe',
     sku: 'AND',
-    category: 'femme',
+    category: 'nouveautes',
     basePrice: 8900,
     description:
       "Caftan revisité en crêpe de soie mélangée, broderie fil doré sur le plastron et manches évasées. Une réinterprétation contemporaine de l'héritage andalou, à porter ceinturé ou fluide.",
