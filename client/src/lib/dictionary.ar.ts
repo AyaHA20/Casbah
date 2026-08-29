@@ -41,6 +41,11 @@ export const ar: Dict = {
   'footer.tracking': 'تتبع الطلب',
   'footer.sizeGuide': 'دليل المقاسات',
   'footer.soon': 'قريباً',
+  'demo.title': 'مساحة تجريبية',
+  'demo.creds': 'المدير:',
+  'demo.enter': 'فتح لوحة التحكم ↗',
+  'demo.readOnly': 'قراءة فقط',
+  'demo.readOnlyHint': 'حساب تجريبي للقراءة فقط: لا يتم حفظ التعديلات.',
 
   // ---- boutique ----
   'home.eyebrow': 'أناقة من هنا.',

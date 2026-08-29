@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { requireAdmin } from '../middleware/require-admin.js'
+import { rejectReadOnly } from '../middleware/reject-read-only.js'
 import { isStorageConfigured, createSignedUpload } from '../lib/storage.js'
 import { IdParam, LoginBody, OrderListQuery, StatusPatchBody } from '../schemas/admin.schema.js'
 import {
@@ -70,6 +71,11 @@ adminRouter.post('/login', async (req, res) => {
 
 // Everything below this line requires a valid admin token.
 adminRouter.use(requireAdmin)
+
+// ...and everything that WRITES additionally requires an account that is not
+// read-only. Mounted once, here, rather than per route: a route added below is
+// protected the moment it exists, which an allow-list could not promise.
+adminRouter.use(rejectReadOnly)
 
 adminRouter.get('/orders', async (req, res) => {
   res.json(await listOrders(OrderListQuery.parse(req.query)))

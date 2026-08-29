@@ -373,7 +373,10 @@ const auth = (token: string) => ({ Authorization: `Bearer ${token}` })
 
 export const adminApi = {
   login: (email: string, password: string) =>
-    request<{ token: string; admin: { id: number; email: string; name: string } }>(
+    request<{
+      token: string
+      admin: { id: number; email: string; name: string; readOnly: boolean }
+    }>(
       '/admin/login',
       { method: 'POST', body: JSON.stringify({ email, password }) },
     ),

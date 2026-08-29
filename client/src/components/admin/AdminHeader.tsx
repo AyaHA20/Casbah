@@ -51,6 +51,14 @@ export function AdminHeader({ now }: { now: Date }) {
         </nav>
 
         <div className="flex items-center gap-4">
+          {admin?.readOnly && (
+            <span
+              title={t('demo.readOnlyHint')}
+              className="rounded-pill border border-rust px-2.5 py-1 text-[11px] font-semibold text-rust"
+            >
+              {t('demo.readOnly')}
+            </span>
+          )}
           <LangToggle compact />
           <span className="hidden text-meta text-ink-soft lg:inline">
             {DATE_FMT.format(now)} · {TIME_FMT.format(now)}

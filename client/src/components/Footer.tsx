@@ -1,6 +1,15 @@
 import { Link } from 'react-router-dom'
 import { Ltr, useT } from '../lib/i18n'
 
+/**
+ * Opt-IN, and only to the exact string "true". Anything else — absent, empty,
+ * "false", "1" — hides it, so a client deployment cannot leak a demo login by
+ * forgetting to unset a variable.
+ */
+const DEMO_MODE = import.meta.env.VITE_DEMO_MODE?.trim() === 'true'
+const DEMO_EMAIL = 'demo@casbah.dz'
+const DEMO_PASSWORD = 'demo1234'
+
 const PHONE_DISPLAY = '0561 20 44 90'
 const PHONE_TEL = '0561204490'
 
@@ -31,6 +40,21 @@ export function Footer() {
           <span className="text-ink-soft">{t('footer.hours')}</span>
           <span className="text-ink-soft">{t('footer.returns')}</span>
         </div>
+
+        {DEMO_MODE && (
+          // Discreet but findable: a portfolio visitor needs to get into the
+          // dashboard, which is the actual product here.
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-line bg-field px-3 py-2.5 text-meta">
+            <span className="font-semibold text-green">{t('demo.title')}</span>
+            <span className="text-ink-soft">
+              {t('demo.creds')} <Ltr>{DEMO_EMAIL}</Ltr> · <Ltr>{DEMO_PASSWORD}</Ltr>
+            </span>
+            <Link to="/admin/login" className="font-semibold text-green underline hover:text-rust">
+              {t('demo.enter')}
+            </Link>
+            <span className="w-full text-ink-soft">{t('demo.readOnlyHint')}</span>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-[14px] border-t border-line pt-[14px] text-meta">
           {LINKS.map(({ key, to }) =>

@@ -35,6 +35,12 @@ export const fr = {
   'footer.tracking': 'Suivi de commande',
   'footer.sizeGuide': 'Guide des tailles',
   'footer.soon': 'Bientôt disponible',
+  // Shown only when VITE_DEMO_MODE=true. Never on a client deployment.
+  'demo.title': 'Espace démo',
+  'demo.creds': 'Admin :',
+  'demo.enter': 'Ouvrir le tableau de bord ↗',
+  'demo.readOnly': 'Lecture seule',
+  'demo.readOnlyHint': 'Compte démo en lecture seule : les modifications ne sont pas enregistrées.',
 
   // ---- boutique ----
   'home.eyebrow': "Style d'ici.",

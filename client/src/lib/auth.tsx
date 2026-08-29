@@ -7,7 +7,17 @@ import {
   type ReactNode,
 } from 'react'
 
-type Admin = { id: number; email: string; name: string }
+type Admin = {
+  id: number
+  email: string
+  name: string
+  /**
+   * Label only. Every write is refused by the server for this account whatever
+   * the browser believes — see server/src/middleware/reject-read-only.ts.
+   * Optional so a profile saved before this existed still parses.
+   */
+  readOnly?: boolean
+}
 
 type AuthValue = {
   token: string | null

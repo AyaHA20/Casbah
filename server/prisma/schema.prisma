@@ -311,4 +311,10 @@ model User {
   passwordHash String
   name         String
   createdAt    DateTime @default(now())
+
+  // The public demo login. Such an account may read everything and write
+  // nothing; enforcement is middleware/reject-read-only.ts, which checks THIS
+  // column rather than a JWT claim so revoking access takes effect at once.
+  // Defaults false, so a normal admin is created with full rights as before.
+  readOnly Boolean @default(false)
 }

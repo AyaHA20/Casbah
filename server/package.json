@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/src/index.js",
     "seed": "tsx prisma/seed.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "seed:demo": "tsx prisma/seed-demo.ts"
   },
   "keywords": [],
   "author": "",

@@ -11,7 +11,7 @@ const REJECT = new HttpError(401, 'BAD_CREDENTIALS', 'E-mail ou mot de passe inc
 export async function login(input: LoginBody) {
   const user = await prisma.user.findUnique({
     where: { email: input.email.toLowerCase() },
-    select: { id: true, email: true, name: true, passwordHash: true },
+    select: { id: true, email: true, name: true, passwordHash: true, readOnly: true },
   })
 
   // Hash even when the user does not exist: comparing against a dummy keeps the
@@ -23,6 +23,8 @@ export async function login(input: LoginBody) {
 
   return {
     token: signAdminToken({ sub: user.id, email: user.email }),
-    admin: { id: user.id, email: user.email, name: user.name },
+    // readOnly is returned for the UI to label itself. It is NOT what enforces
+    // anything — the middleware re-reads the column on every write.
+    admin: { id: user.id, email: user.email, name: user.name, readOnly: user.readOnly },
   }
 }
