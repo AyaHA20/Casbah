@@ -88,6 +88,3 @@ export const ImageDetachBody = z.object({
   url: z.string().trim().min(1).max(500),
 })
 
-export const ProductTypeCreateBody = z.object({
-  name: z.string().trim().min(2).max(60),
-})

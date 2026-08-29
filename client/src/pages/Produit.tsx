@@ -134,6 +134,9 @@ export function Produit() {
       variantId: selected.id,
       slug: product.slug,
       productName: product.name,
+      // Both names, not the resolved one: the cart outlives the language
+      // toggle, and a line frozen in French would stay French after a switch.
+      productNameAr: product.nameAr,
       size: selected.size,
       color: selected.color,
       sku: selected.sku,
@@ -160,7 +163,7 @@ export function Produit() {
             <span>{t('products.noCategory')}</span>
           )}
           {' / '}
-          <span className="text-ink">{product.name}</span>
+          <span className="text-ink">{localized(product.name, product.nameAr, lang)}</span>
         </div>
       </div>
 
@@ -216,7 +219,7 @@ export function Produit() {
               · {t('product.ref')} {selected?.sku ?? product.slug}
             </span>
             <h1 className="text-[38px] leading-[0.94] lg:text-[60px] lg:leading-[0.92]">
-              {product.name}
+              {localized(product.name, product.nameAr, lang)}
             </h1>
             <div className="flex items-baseline gap-3">
               <span className="font-display text-[30px] font-bold lg:text-[40px]">
@@ -226,8 +229,8 @@ export function Produit() {
             </div>
             {selected && selected.stock > 0 && (
               <span className="text-meta font-medium text-green">
-                En stock — {selected.stock} pièce{selected.stock > 1 ? 's' : ''} disponible
-                {selected.stock > 1 ? 's' : ''}
+                {t('product.inStock')} — {selected.stock}{' '}
+                {selected.stock > 1 ? t('product.pieces') : t('product.piece')}
               </span>
             )}
             {selected && selected.stock === 0 && (
@@ -237,12 +240,14 @@ export function Produit() {
             )}
           </div>
 
-          <p className="max-w-[46ch] text-body lg:text-body-lg">{product.description}</p>
+          <p className="max-w-[46ch] text-body lg:text-body-lg">
+            {localized(product.description, product.descriptionAr, lang)}
+          </p>
 
           {/* Couleur */}
           <div className="flex flex-col gap-[10px]">
             <span className="text-label font-semibold uppercase text-ink-soft">
-              Couleur — {color}
+              {t('product.color')} — {color}
             </span>
             <div className="flex gap-[10px] lg:gap-3">
               {colors.map((c) => {

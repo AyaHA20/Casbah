@@ -7,7 +7,6 @@ import {
   ImageDeleteBody,
   ImageDetachBody,
   ProductCreateBody,
-  ProductTypeCreateBody,
   ProductListQueryAdmin,
   ProductUpdateBody,
   SignUploadBody,
@@ -22,6 +21,14 @@ import {
   listCategories,
   updateCategory,
 } from '../services/categories.service.js'
+import {
+  ProductTypeBody,
+  ProductTypeUpdateBody,
+  createProductType,
+  deleteProductType,
+  listProductTypes,
+  updateProductType,
+} from '../services/product-types.service.js'
 import { login } from '../services/admin-auth.service.js'
 import {
   RateListQuery,
@@ -42,8 +49,6 @@ import { addImage, listImages, removeImage } from '../services/product-images.se
 import {
   attachImage,
   createProduct,
-  createProductType,
-  listProductTypes,
   deleteProduct,
   createVariant,
   deleteVariant,
@@ -139,14 +144,23 @@ adminRouter.delete('/categories/:id', async (req, res) => {
   res.json(await deleteCategory(IdParam.parse(req.params.id)))
 })
 
+// Types are what the garment IS — orthogonal to both Category and Gender.
 adminRouter.get('/product-types', async (_req, res) => {
   res.json(await listProductTypes())
 })
 
 // Created inline from the product form so the owner never loses their place.
 adminRouter.post('/product-types', async (req, res) => {
-  const { name } = ProductTypeCreateBody.parse(req.body)
-  res.status(201).json(await createProductType(name))
+  res.status(201).json(await createProductType(ProductTypeBody.parse(req.body)))
+})
+
+adminRouter.patch('/product-types/:id', async (req, res) => {
+  const id = IdParam.parse(req.params.id)
+  res.json(await updateProductType(id, ProductTypeUpdateBody.parse(req.body)))
+})
+
+adminRouter.delete('/product-types/:id', async (req, res) => {
+  res.json(await deleteProductType(IdParam.parse(req.params.id)))
 })
 
 // ------------------------------------------------------------ shipping rates

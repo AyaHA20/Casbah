@@ -35,15 +35,17 @@ export async function listCommunes(code: number) {
   // exactly why this must be explicit.
   const wilaya = await prisma.wilaya.findUnique({
     where: { code },
-    select: { id: true, nameFr: true },
+    select: { id: true, nameFr: true, nameAr: true },
   })
   if (!wilaya) throw notFound(`Wilaya introuvable : ${code}`)
 
   const communes = await prisma.commune.findMany({
     where: { wilayaId: wilaya.id },
     orderBy: { name: 'asc' },
-    select: { id: true, name: true },
+    select: { id: true, name: true, nameAr: true },
   })
 
-  return { wilaya: { code, nameFr: wilaya.nameFr }, communes }
+  // nameAr rides along with nameFr everywhere a wilaya is named, so this
+  // response cannot drift from GET /wilayas the way the product endpoints did.
+  return { wilaya: { code, nameFr: wilaya.nameFr, nameAr: wilaya.nameAr }, communes }
 }

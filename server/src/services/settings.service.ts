@@ -12,21 +12,46 @@ import { cardImages, galleriesForProducts } from './product-images.service.js'
  * An empty string counts as "not set" — clearing a field in the admin must mean
  * the same thing as never filling it.
  */
-export const StorefrontSettings = z.object({
-  heroImage: z.string().default(''),
-  heroHeadingFr: z.string().default(''),
-  heroHeadingAr: z.string().default(''),
-  heroBodyFr: z.string().default(''),
-  heroBodyAr: z.string().default(''),
-  heroCtaFr: z.string().default(''),
-  heroCtaAr: z.string().default(''),
-  qrUrl: z.string().default(''),
+/**
+ * The field shapes, with no defaults attached.
+ *
+ * Defaults belong on reads only — see StorefrontSettings below. They must not
+ * reach the update body, and `.partial()` is not enough to keep them out:
+ * Zod 4 applies a `.default()` even through `.optional()`, so
+ * `StorefrontSettings.partial().parse({ heroImage: 'x' })` returns all nine
+ * keys with the other eight as `''`. updateSettings writes every key it is
+ * handed, so that body silently blanked the whole hero — which is exactly
+ * what the admin's image upload sends.
+ */
+const settingsShape = {
+  heroImage: z.string(),
+  heroHeadingFr: z.string(),
+  heroHeadingAr: z.string(),
+  heroBodyFr: z.string(),
+  heroBodyAr: z.string(),
+  heroCtaFr: z.string(),
+  heroCtaAr: z.string(),
+  qrUrl: z.string(),
   /** Ordered: the owner controls the sequence, not just the membership. */
-  featuredProductIds: z.array(z.number().int().positive()).default([]),
+  featuredProductIds: z.array(z.number().int().positive()),
+}
+
+export const StorefrontSettings = z.object({
+  heroImage: settingsShape.heroImage.default(''),
+  heroHeadingFr: settingsShape.heroHeadingFr.default(''),
+  heroHeadingAr: settingsShape.heroHeadingAr.default(''),
+  heroBodyFr: settingsShape.heroBodyFr.default(''),
+  heroBodyAr: settingsShape.heroBodyAr.default(''),
+  heroCtaFr: settingsShape.heroCtaFr.default(''),
+  heroCtaAr: settingsShape.heroCtaAr.default(''),
+  qrUrl: settingsShape.qrUrl.default(''),
+  featuredProductIds: settingsShape.featuredProductIds.default([]),
 })
 export type StorefrontSettings = z.infer<typeof StorefrontSettings>
 
-export const SettingsUpdateBody = StorefrontSettings.partial()
+// Undefaulted, so a key the caller omitted stays `undefined` and is skipped by
+// the `v !== undefined` filter in updateSettings instead of being written blank.
+export const SettingsUpdateBody = z.object(settingsShape).partial()
 export type SettingsUpdateBody = z.infer<typeof SettingsUpdateBody>
 
 const KEYS: Record<keyof StorefrontSettings, string> = {

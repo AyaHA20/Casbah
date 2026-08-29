@@ -16,7 +16,7 @@ import { TableSkeleton } from '../../components/Skeleton'
 import { fmtDA, swatch } from '../../lib/format'
 import { Ltr, useT } from '../../lib/i18n'
 import { DateField } from '../../components/admin/DateField'
-import { CategoryPicker, RayonsPanel } from '../../components/admin/CategoryManager'
+import { CategoryPicker, RayonsPanel, TypesPanel } from '../../components/admin/CategoryManager'
 import {
   Chip,
   FIELD,
@@ -353,6 +353,10 @@ export function AdminProduits() {
           ever a handful, and they are edited while looking at the products
           that sit in them. */}
       <RayonsPanel categories={categories} onChanged={refreshCategories} />
+
+      {/* Beside Rayons, not on its own page: both are small taxonomies edited
+          while looking at the products filed under them. */}
+      <TypesPanel types={types} onChanged={refreshTypes} />
 
       {creating && (
         <ProductCreateForm

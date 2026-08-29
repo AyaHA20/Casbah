@@ -5,7 +5,7 @@ import { fmtDA } from '../lib/format'
 import { useCart } from '../lib/cart'
 import { FetchError } from '../components/FetchError'
 import { FieldSkeleton } from '../components/Skeleton'
-import { Ltr, useT } from '../lib/i18n'
+import { Ltr, localized, useT } from '../lib/i18n'
 
 const PHONE_RE = /^0[5-7]\d{8}$/
 
@@ -221,7 +221,10 @@ export function Commande() {
           <span>{fmtDA(subtotal, lang)}</span>
         </div>
         <div className="flex justify-between text-sm lg:text-[15px]">
-          <span className="text-ink-soft">Livraison — {wilaya?.nameFr ?? '…'}</span>
+          <span className="text-ink-soft">
+            {t('checkout.shipping')} —{' '}
+            {wilaya ? localized(wilaya.nameFr, wilaya.nameAr, lang) : '…'}
+          </span>
           <span>{shipping === null ? '…' : fmtDA(shipping, lang)}</span>
         </div>
         <div className="flex items-baseline justify-between border-t border-line pt-[10px] lg:border-ink lg:pt-[14px]">
@@ -276,7 +279,9 @@ export function Commande() {
             >
               <div className="h-[68px] w-14 flex-none rounded-[26px_26px_2px_2px] border border-cream-edge bg-glow" />
               <div className="flex-1">
-                <div className="text-sm font-semibold">{l.productName}</div>
+                <div className="text-sm font-semibold">
+                  {localized(l.productName, l.productNameAr, lang)}
+                </div>
                 <div className="text-xs text-ink-soft">
                   {l.color} · {l.size}
                 </div>
@@ -386,7 +391,7 @@ export function Commande() {
             >
               {communes.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}
+                  {localized(c.name, c.nameAr, lang)}
                 </option>
               ))}
             </select>

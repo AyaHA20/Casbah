@@ -12,6 +12,11 @@ export type CartLine = {
   variantId: number
   slug: string
   productName: string
+  /**
+   * Optional because carts saved before this existed are still in localStorage
+   * and must keep working — `localized()` falls back to French on undefined.
+   */
+  productNameAr?: string | null
   size: string
   color: string
   sku: string

@@ -160,8 +160,44 @@ it isn't.
   run once and deleted. There is no `npm test` that would catch a
   regression tomorrow.
 
+## Adding a field to a model
+
+**A field is not "added" until every endpoint returning that model returns
+it.** This has now gone wrong four times — per-colour photos, `gender`,
+`nameAr` on `listFilters`, and the storefront render path — always the same
+shape: the field is wired into the endpoint being worked on, its siblings are
+forgotten, and the symptom shows up days later as "the admin saves it but the
+storefront doesn't show it".
+
+When adding or consuming a field on Product, Category, ProductType or Variant,
+walk this list and check each one:
+
+- **Product** — `listProducts`, `getProductBySlug`, `getStorefront`
+  (featured strip), `productSelect` in `admin-catalog.service.ts`
+- **Category / ProductType** — `listFilters`, plus the nested
+  `category: { select }` / `type: { select }` inside all four Product selects
+  above, plus `listCategories` / `listProductTypes`
+- **Variant** — `getProductBySlug`, `productSelect`, `createVariant`,
+  `updateVariant`, and the variant select in `orders.service.ts`
+- **Wilaya** — `listWilayas` *and* the `wilaya` object inside `listCommunes`
+
+Then two things that are not selects and are the ones actually missed:
+
+1. **The client type must not lie.** If `api.ts` declares a field the select
+   omits, TypeScript is silent and the value is `undefined` at runtime.
+2. **A returned field still has to be rendered.** The Arabic bug was not a
+   missing select — every endpoint had `nameAr`. `Produit.tsx` rendered
+   `product.name` raw instead of calling `localized()`. Grep the render sites,
+   not just the queries.
+
+And a field is only real once something can *write* it: `ProductType.nameAr`
+has existed for weeks with no admin control, so it is null on all 11 rows.
+
 ## Migration verification
 `prisma migrate status` only compares the migrations folder to what's
 recorded as applied. It does NOT detect a model in schema.prisma that
 no migration ever created. On a P2021 "table does not exist", grep the
 migration SQL for CREATE TABLE rather than trusting the status summary.
+Reword it to: "Product Arabic complete (12/12). Category and
+ProductType Arabic are writable via the admin panels but not yet
+filled in."

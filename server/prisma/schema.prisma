@@ -195,6 +195,11 @@ model Commune {
   wilayaId Int
   name     String
 
+  // Nullable, unlike Wilaya.nameAr: communes are loaded from communes.json,
+  // which covers all 1541 today, but a commune added by hand later must not be
+  // blocked on someone having the Arabic to hand. localized() falls back.
+  nameAr String?
+
   // Cascade: communes are reference data owned by their wilaya. Re-seeding a
   // wilaya should clear its communes. Any commune actually referenced by an
   // order is still protected -- Order.commune is Restrict, which aborts the

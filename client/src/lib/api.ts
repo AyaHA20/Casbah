@@ -20,7 +20,14 @@ const BASE = resolveApiBase()
 export type Category = { name: string; nameAr: string | null; slug: string }
 /** What the garment IS — orthogonal to Category. A robe is femme AND robe. */
 export type ProductTypeRef = { name: string; nameAr: string | null; slug: string }
-export type AdminProductType = { id: number; name: string; slug: string; _count?: { products: number } }
+export type AdminProductType = {
+  id: number
+  name: string
+  nameAr: string | null
+  slug: string
+  /** Always returned: both list and create select it. The delete guard reads it. */
+  _count: { products: number }
+}
 /**
  * A shop section — Nouveautés, Soldes, Collection été. Never a gender.
  *
@@ -104,7 +111,7 @@ export type Wilaya = {
   carrier: string | null
 }
 
-export type Commune = { id: number; name: string }
+export type Commune = { id: number; name: string; nameAr: string | null }
 
 /** Photos for one colour. `color: null` is the shared fallback set. */
 export type ColourGallery = {
@@ -564,6 +571,21 @@ export const adminApi = {
       body: JSON.stringify({ name }),
     }),
 
+  // Same contract as updateCategory: the slug is not re-derived on rename,
+  // because it lives in storefront filter URLs.
+  updateProductType: (token: string, id: number, body: { name?: string; nameAr?: string | null }) =>
+    request<AdminProductType>(`/admin/product-types/${id}`, {
+      method: 'PATCH',
+      headers: auth(token),
+      body: JSON.stringify(body),
+    }),
+
+  deleteProductType: (token: string, id: number) =>
+    request<{ deleted: boolean; name: string }>(`/admin/product-types/${id}`, {
+      method: 'DELETE',
+      headers: auth(token),
+    }),
+
   // ------------------------------------------------------------------ images
   getSettings: (token: string) =>
     request<StorefrontSettings>('/admin/settings', { headers: auth(token) }),
@@ -656,7 +678,7 @@ export const api = {
   listWilayas: () => request<Wilaya[]>('/wilayas'),
 
   listCommunes: (code: number) =>
-    request<{ wilaya: { code: number; nameFr: string }; communes: Commune[] }>(
+    request<{ wilaya: { code: number; nameFr: string; nameAr: string }; communes: Commune[] }>(
       `/wilayas/${code}/communes`,
     ),
 

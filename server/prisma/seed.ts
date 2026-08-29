@@ -357,8 +357,10 @@ async function seedCommunes(wilayaIdByCode: Map<number, number>): Promise<void> 
     }
     await prisma.commune.upsert({
       where: { wilayaId_name: { wilayaId, name: c.name } },
-      update: {},
-      create: { wilayaId, name: c.name },
+      // Not `update: {}`: the 1541 rows already exist, so an empty update would
+      // leave every one of them without the Arabic name this seed now carries.
+      update: { nameAr: c.name_ar },
+      create: { wilayaId, name: c.name, nameAr: c.name_ar },
     })
   })
   console.log(`  communes:   ${RAW_COMMUNES.length}`)

@@ -273,24 +273,8 @@ export async function deleteProduct(id: number) {
   }
 }
 
-export async function listProductTypes() {
-  return prisma.productType.findMany({
-    orderBy: { name: 'asc' },
-    select: { id: true, name: true, slug: true, _count: { select: { products: true } } },
-  })
-}
-
-/** Created inline from the product form, so the owner never leaves the page. */
-export async function createProductType(name: string) {
-  const slug = slugify(name)
-  if (!slug) throw badRequest('BAD_SLUG', 'Impossible de générer un slug depuis ce nom.')
-  const clash = await prisma.productType.findUnique({ where: { slug }, select: { id: true } })
-  if (clash) throw conflict('TYPE_EXISTS', `Le type « ${name} » existe déjà.`)
-  return prisma.productType.create({
-    data: { name, slug },
-    select: { id: true, name: true, slug: true },
-  })
-}
+// Product types moved to product-types.service.ts, so they sit beside
+// categories.service.ts and the two stay the same shape.
 
 async function assertCategory(categoryId: number) {
   const cat = await prisma.category.findUnique({ where: { id: categoryId }, select: { id: true } })

@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { ApiError, adminApi, type AdminCategory } from '../../lib/api'
+import { adminApi, type AdminCategory, type AdminProductType } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useT } from '../../lib/i18n'
 import { FIELD } from './filters'
+import { TaxonomyPanel } from './TaxonomyPanel'
 
 const LABEL = 'text-meta text-ink-soft'
 
@@ -113,12 +114,7 @@ export function CategoryPicker({
   )
 }
 
-/**
- * Rename and delete. Deleting is refused server-side while products are still
- * filed under the section — Product.categoryId is SetNull, so the delete would
- * otherwise succeed and quietly uncategorise them. The count is shown up front
- * so the refusal is visible before anyone clicks, not only afterwards.
- */
+/** Rayons — the shop sections. Rename, add Arabic, delete when empty. */
 export function RayonsPanel({
   categories,
   onChanged,
@@ -128,161 +124,48 @@ export function RayonsPanel({
 }) {
   const { t } = useT()
   const { token } = useAuth()
-  const [open, setOpen] = useState(false)
-  const [editId, setEditId] = useState<number | null>(null)
-  const [name, setName] = useState('')
-  const [nameAr, setNameAr] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-
-  function edit(c: AdminCategory) {
-    setEditId(c.id)
-    setName(c.name)
-    setNameAr(c.nameAr ?? '')
-    setErr(null)
-  }
-
-  async function save(c: AdminCategory) {
-    if (!token) return
-    setBusy(true)
-    setErr(null)
-    try {
-      // Only what changed — an untouched Arabic name is never rewritten to ''.
-      await adminApi.updateCategory(token, c.id, {
-        ...(name.trim() !== c.name ? { name: name.trim() } : {}),
-        ...(nameAr.trim() !== (c.nameAr ?? '') ? { nameAr: nameAr.trim() || null } : {}),
-      })
-      setEditId(null)
-      await onChanged()
-    } catch (e) {
-      setErr(e instanceof ApiError ? e.message : t('common.error'))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function remove(c: AdminCategory) {
-    if (!token) return
-    setBusy(true)
-    setErr(null)
-    try {
-      await adminApi.deleteCategory(token, c.id)
-      await onChanged()
-    } catch (e) {
-      // CATEGORY_IN_USE arrives with a French sentence naming the count — it is
-      // more useful than anything this component could compose.
-      setErr(e instanceof ApiError ? e.message : t('common.error'))
-    } finally {
-      setBusy(false)
-    }
-  }
 
   return (
-    <section className="rounded-lg border border-line">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="flex min-h-11 w-full items-center justify-between px-4 py-3 text-start"
-      >
-        <span className="text-sm font-semibold">
-          {t('categories.title')}{' '}
-          <span className="font-normal text-ink-soft">({categories.length})</span>
-        </span>
-        <span aria-hidden className="text-ink-soft">
-          {open ? '–' : '+'}
-        </span>
-      </button>
+    <TaxonomyPanel
+      items={categories}
+      title={t('categories.title')}
+      help={t('categories.help')}
+      inUse={t('categories.inUse')}
+      empty={t('categories.empty')}
+      onSave={(id, body) => adminApi.updateCategory(token!, id, body)}
+      onDelete={(id) => adminApi.deleteCategory(token!, id)}
+      onChanged={onChanged}
+    />
+  )
+}
 
-      {open && (
-        <div className="flex flex-col gap-2 border-t border-line p-4">
-          <p className="text-meta text-ink-soft">{t('categories.help')}</p>
+/**
+ * Types — what the garment IS.
+ *
+ * Same panel as Rayons. Until this existed, ProductType.nameAr had no write
+ * path at all, so every type chip on the storefront fell back to French no
+ * matter what the endpoints returned.
+ */
+export function TypesPanel({
+  types,
+  onChanged,
+}: {
+  types: AdminProductType[]
+  onChanged: () => Promise<void>
+}) {
+  const { t } = useT()
+  const { token } = useAuth()
 
-          {err && (
-            <p className="rounded-md border border-rust/40 bg-rust/5 p-2 text-meta text-rust">
-              {err}
-            </p>
-          )}
-
-          {categories.map((c) =>
-            editId === c.id ? (
-              <div key={c.id} className="flex flex-wrap items-center gap-2">
-                <input
-                  autoFocus
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className={`${FIELD} flex-1`}
-                />
-                <input
-                  dir="rtl"
-                  value={nameAr}
-                  onChange={(e) => setNameAr(e.target.value)}
-                  placeholder={t('categories.nameAr')}
-                  className={`${FIELD} flex-1`}
-                />
-                <button
-                  type="button"
-                  disabled={busy || name.trim().length < 2}
-                  onClick={() => void save(c)}
-                  className="min-h-11 rounded-pill border border-green bg-green px-4 text-meta font-semibold text-cream disabled:border-line disabled:bg-line disabled:text-white"
-                >
-                  {busy ? '…' : t('products.save')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditId(null)}
-                  className="min-h-11 px-2 text-meta text-ink-soft hover:text-ink"
-                >
-                  {t('common.cancel')}
-                </button>
-              </div>
-            ) : (
-              <div
-                key={c.id}
-                className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2 last:border-0"
-              >
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">
-                    {c.name}
-                    {c.nameAr && (
-                      <span className="ps-2 text-ink-soft" dir="rtl">
-                        {c.nameAr}
-                      </span>
-                    )}
-                  </span>
-                  <span className="text-meta text-ink-soft">
-                    {c.slug} · {c._count.products} {t('categories.products')}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => edit(c)}
-                    className="min-h-11 rounded-pill border border-line px-3 text-meta font-semibold text-ink hover:border-green hover:text-green"
-                  >
-                    {t('categories.edit')}
-                  </button>
-                  {/* Disabled rather than hidden: the count next to it explains
-                      why, and a button that vanishes reads as a missing feature. */}
-                  <button
-                    type="button"
-                    disabled={busy || c._count.products > 0}
-                    title={c._count.products > 0 ? t('categories.inUse') : ''}
-                    onClick={() => void remove(c)}
-                    className="min-h-11 rounded-pill border border-line px-3 text-meta font-semibold text-rust hover:border-rust disabled:text-line disabled:hover:border-line"
-                  >
-                    {t('products.delete')}
-                  </button>
-                </div>
-              </div>
-            ),
-          )}
-
-          {categories.length === 0 && (
-            <p className="py-2 text-meta text-ink-soft">{t('categories.empty')}</p>
-          )}
-        </div>
-      )}
-    </section>
+  return (
+    <TaxonomyPanel
+      items={types}
+      title={t('types.title')}
+      help={t('types.help')}
+      inUse={t('types.inUse')}
+      empty={t('types.empty')}
+      onSave={(id, body) => adminApi.updateProductType(token!, id, body)}
+      onDelete={(id) => adminApi.deleteProductType(token!, id)}
+      onChanged={onChanged}
+    />
   )
 }

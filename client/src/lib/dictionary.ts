@@ -73,6 +73,9 @@ export const fr = {
   'product.addToCart': 'Ajouter au panier',
   'product.soldOut': 'Épuisé',
   'product.inStock': 'En stock',
+  // Two forms only. French needs the singular; Arabic's dual and its
+  // 3-10 vs 11+ plurals are approximated the same way as elsewhere here.
+  'product.piece': 'pièce disponible',
   'product.pieces': 'pièces disponibles',
   'product.unavailable': 'Cette taille est épuisée.',
   'product.payment': 'Paiement',
@@ -231,6 +234,12 @@ export const fr = {
   'categories.inUse': 'Ce rayon contient encore des produits. Déplacez-les avant de le supprimer.',
   'categories.empty': 'Aucun rayon.',
   'categories.nameAr': 'Nom en arabe',
+  // Types — what the garment IS. Orthogonal to Rayon and to Genre.
+  'types.title': 'Types',
+  'types.help':
+    'Ce que le vêtement EST : robe, chemise, pantalon. Indépendant du rayon et du genre.',
+  'types.inUse': 'Ce type contient encore des produits. Retypez-les avant de le supprimer.',
+  'types.empty': 'Aucun type.',
   'products.create': 'Créer',
   'products.save': 'Enregistrer',
   'products.saving': 'Enregistrement…',
