@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ApiError, api, type Commune, type CreatedOrder, type Wilaya } from '../lib/api'
+import {
+  ApiError,
+  api,
+  describeError,
+  type Commune,
+  type CreatedOrder,
+  type Wilaya,
+} from '../lib/api'
 import { fmtDA } from '../lib/format'
 import { useCart } from '../lib/cart'
 import { FetchError } from '../components/FetchError'
@@ -11,6 +18,22 @@ import type { Dict } from '../lib/dictionary'
 const PHONE_RE = /^0[5-7]\d{8}$/
 
 type TKey = keyof Dict
+
+/**
+ * Where each rejected server field lives on this form.
+ *
+ * The API answers with `details: [{ path, message }]`; without this the page
+ * could only show "Données invalides." and leave the customer hunting.
+ */
+const FIELD_FOR_PATH: Record<string, string> = {
+  customerName: 'name',
+  phone: 'phone',
+  wilayaCode: 'wilaya',
+  communeId: 'commune',
+  address: 'address',
+  notes: 'notes',
+  items: 'cart',
+}
 
 export function Commande() {
   const { t, lang } = useT()
@@ -90,10 +113,12 @@ export function Commande() {
       ? [{ field: 'name' as const, key: 'checkout.errName' as const }]
       : []),
     ...(!phoneOk ? [{ field: 'phone' as const, key: 'checkout.errPhone' as const }] : []),
-    ...(wilayaCode === null
+    // `> 0`, not `!== null`: the server requires a positive integer, and a 0
+    // slipping through is exactly how the client came to disagree with it.
+    ...(wilayaCode === null || wilayaCode <= 0
       ? [{ field: 'wilaya' as const, key: 'checkout.errWilaya' as const }]
       : []),
-    ...(communeId === null
+    ...(communeId === null || communeId <= 0
       ? [{ field: 'commune' as const, key: 'checkout.errCommune' as const }]
       : []),
   ]
@@ -104,7 +129,19 @@ export function Commande() {
   // first three letters of their name.
   const [touched, setTouched] = useState<Record<string, boolean>>({})
   const [attempted, setAttempted] = useState(false)
+  // What the SERVER rejected, keyed by form field. Survives until the next
+  // submit so the message stays put while the customer fixes the field.
+  const [serverErrors, setServerErrors] = useState<Record<string, string>>({})
+
+  // Editing a field retracts the server's verdict on it — a rejection left
+  // sitting next to a value the customer has already corrected is its own bug.
+  const clearServer = (field: string) =>
+    setServerErrors((s) => (s[field] ? { ...s, [field]: '' } : s))
+
   const errorFor = (field: string): string | null => {
+    // The server's verdict wins: it is the rule that actually blocked the
+    // order, and if it disagrees with the client the client is the wrong one.
+    if (serverErrors[field]) return serverErrors[field]
     if (!touched[field] && !attempted) return null
     const p = problems.find((x) => x.field === field)
     return p ? t(p.key) : null
@@ -114,6 +151,9 @@ export function Commande() {
     if (!ready || wilayaCode === null || communeId === null) return
     setSubmitting(true)
     setError(null)
+    // Last attempt's server verdict must not outlive this one.
+    setServerErrors({})
+    setShortfall({})
     try {
       const order = await api.createOrder({
         customerName: customerName.trim(),
@@ -129,19 +169,37 @@ export function Commande() {
       setConfirmed(order)
       clear()
     } catch (e) {
-      // OUT_OF_STOCK carries details: [{ sku, requested, available }]. Showing
-      // only the message tells the customer something is wrong but not what to
-      // change, which leaves them stuck on the page.
-      if (e instanceof ApiError && e.code === 'OUT_OF_STOCK' && Array.isArray(e.details)) {
+      if (e instanceof ApiError && e.code === 'OUT_OF_STOCK') {
+        // Two shapes reach here: the pre-check throws an ARRAY of every short
+        // line, while the race-loser inside the transaction throws a single
+        // OBJECT for the one variant it lost. Normalising means the rare race
+        // marks its cart line too, instead of falling through to a banner.
+        const raw = Array.isArray(e.details) ? e.details : [e.details]
         const short: Record<number, number> = {}
-        for (const d of e.details as Array<{ sku?: string; available?: number }>) {
-          const line = lines.find((l) => l.sku === d.sku)
-          if (line && typeof d.available === 'number') short[line.variantId] = d.available
+        for (const d of raw as Array<{ sku?: string; available?: number } | undefined>) {
+          const line = d && lines.find((l) => l.sku === d.sku)
+          // The race path knows only that it lost, not how many are left; 0 is
+          // the honest reading and renders as "épuisé" on that line.
+          if (line) short[line.variantId] = typeof d?.available === 'number' ? d.available : 0
         }
         setShortfall(short)
         setError(t('checkout.stockChanged') + ' ' + t('checkout.adjustCart'))
+      } else if (e instanceof ApiError && e.code === 'VALIDATION_ERROR') {
+        // The server names the failing field in details[].path. Discarding it
+        // was the whole bug: "Données invalides." with nothing marked.
+        const marked: Record<string, string> = {}
+        const raw = Array.isArray(e.details) ? e.details : []
+        for (const d of raw as Array<{ path?: string; message?: string }>) {
+          const field = FIELD_FOR_PATH[String(d.path ?? '').split('.')[0] ?? '']
+          if (field && d.message) marked[field] = d.message
+        }
+        setServerErrors(marked)
+        setAttempted(true)
+        // Unmapped paths would otherwise vanish, so the banner keeps the full
+        // text via describeError() rather than the bare message.
+        setError(Object.keys(marked).length > 0 ? t('checkout.fixFields') : describeError(e))
       } else {
-        setError(e instanceof ApiError ? e.message : t('common.error'))
+        setError(describeError(e))
       }
     } finally {
       setSubmitting(false)
@@ -387,7 +445,10 @@ export function Commande() {
             <input
               className={errorFor('name') ? fieldErrCls : fieldCls}
               value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
+              onChange={(e) => {
+                setCustomerName(e.target.value)
+                clearServer('name')
+              }}
               onBlur={() => setTouched((s) => ({ ...s, name: true }))}
               aria-invalid={errorFor('name') !== null}
               placeholder={t('ph.customerName')}
@@ -399,7 +460,10 @@ export function Commande() {
             <input
               className={errorFor('phone') ? fieldErrCls : fieldCls}
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => {
+                setPhone(e.target.value)
+                clearServer('phone')
+              }}
               onBlur={() => setTouched((s) => ({ ...s, phone: true }))}
               aria-invalid={errorFor('phone') !== null}
               placeholder="0561 88 12 04"
@@ -431,7 +495,10 @@ export function Commande() {
             <select
               className={`${errorFor('wilaya') ? fieldErrCls : fieldCls} appearance-none`}
               value={wilayaCode ?? ''}
-              onChange={(e) => setWilayaCode(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) => {
+                setWilayaCode(e.target.value ? Number(e.target.value) : null)
+                clearServer('wilaya')
+              }}
               onBlur={() => setTouched((s) => ({ ...s, wilaya: true }))}
               aria-invalid={errorFor('wilaya') !== null}
             >
@@ -450,7 +517,10 @@ export function Commande() {
             <select
               className={`${errorFor('commune') ? fieldErrCls : fieldCls} appearance-none`}
               value={communeId ?? ''}
-              onChange={(e) => setCommuneId(Number(e.target.value))}
+              onChange={(e) => {
+                setCommuneId(e.target.value ? Number(e.target.value) : null)
+                clearServer('commune')
+              }}
               onBlur={() => setTouched((s) => ({ ...s, commune: true }))}
               aria-invalid={errorFor('commune') !== null}
               disabled={communes.length === 0}
@@ -511,7 +581,8 @@ export function Commande() {
               and requiring one was turning real orders away. */}
           <span className="text-xs text-ink-soft">{t('checkout.addressHint')}</span>
           <textarea
-            className={`${fieldCls} min-h-[76px] resize-y`}
+            className={`${errorFor('address') ? fieldErrCls : fieldCls} min-h-[76px] resize-y`}
+            aria-invalid={errorFor('address') !== null}
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             placeholder={t('ph.address')}

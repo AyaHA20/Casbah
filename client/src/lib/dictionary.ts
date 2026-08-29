@@ -116,6 +116,9 @@ export const fr = {
   // Validation messages. The button used to sit dead with no explanation at
   // all, which is the one failure mode that just loses the sale.
   'checkout.blocked': 'Il reste à corriger :',
+  // Shown when the SERVER rejected the order and each bad field is marked
+  // inline — the banner points at them rather than repeating them.
+  'checkout.fixFields': 'Le serveur a refusé la commande. Corrigez les champs signalés en rouge.',
   'checkout.errCart': 'votre panier est vide',
   'checkout.errName': 'le nom doit faire au moins 3 caractères',
   'checkout.errPhone': 'le numéro doit être au format 0X XX XX XX XX (05, 06 ou 07)',

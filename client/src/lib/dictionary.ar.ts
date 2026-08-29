@@ -116,6 +116,7 @@ export const ar: Dict = {
   'checkout.subtotal': 'المجموع الفرعي',
   'checkout.shipping': 'التوصيل',
   'checkout.blocked': 'يجب تصحيح ما يلي:',
+  'checkout.fixFields': 'رفض الخادم الطلب. صحّح الحقول المعلّمة بالأحمر.',
   'checkout.errCart': 'سلتك فارغة',
   'checkout.errName': 'يجب أن يتكوّن الاسم من 3 أحرف على الأقل',
   'checkout.errPhone': 'يجب أن يكون الرقم بصيغة 0X XX XX XX XX (05 أو 06 أو 07)',
