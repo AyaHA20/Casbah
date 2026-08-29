@@ -314,6 +314,11 @@ export type AdminOrderDetail = {
     variantSize: string
     variantColor: string
     sku: string
+    /**
+     * The photo as it was when the line was sold, not the product's photo now.
+     * Null when the product had no photo at that moment.
+     */
+    imageUrl: string | null
   }>
   allowedTransitions: OrderStatus[]
   customer: CustomerHistory

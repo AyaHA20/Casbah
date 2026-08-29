@@ -4,6 +4,7 @@ import {
   ApiError,
   api,
   describeError,
+  resolveGallery,
   type Commune,
   type CreatedOrder,
   type Wilaya,
@@ -52,6 +53,10 @@ export function Commande() {
   const [submitting, setSubmitting] = useState(false)
   /** variantId -> units actually available, when the server says a line is short. */
   const [shortfall, setShortfall] = useState<Record<number, number>>({})
+  // variantId -> thumbnail. Resolved live from the catalogue rather than stored
+  // on the cart line: a line can sit in localStorage for weeks, and the photo
+  // it was added with may since have been replaced.
+  const [thumbs, setThumbs] = useState<Record<number, string>>({})
   const [error, setError] = useState<string | null>(null)
   /** Destination lookups are separate from submit errors: one blocks the form. */
   const [geoError, setGeoError] = useState<unknown>(null)
@@ -216,16 +221,28 @@ export function Commande() {
       .then((products) => {
         if (cancelled) return
         const stockByVariant = new Map<number, number>()
+        const bySlug = new Map<string, (typeof products)[number]>()
         for (const p of products) {
           if (!p) continue
+          bySlug.set(p.slug, p)
           for (const v of p.variants) stockByVariant.set(v.id, v.stock)
         }
         const short: Record<number, number> = {}
+        // Same fetch, so the thumbnail costs no extra request.
+        const pics: Record<number, string> = {}
         for (const l of lines) {
           const available = stockByVariant.get(l.variantId)
           if (available !== undefined && available < l.quantity) short[l.variantId] = available
+
+          // The exact chain the product page uses — colour set, then the shared
+          // set, then the legacy flat list. The cart line knows which colour was
+          // chosen, so it gets the photo of that colour and not a generic one.
+          const p = bySlug.get(l.slug)
+          const first = p ? resolveGallery(p.galleries, p.images, l.color)[0] : undefined
+          if (first) pics[l.variantId] = first
         }
         setShortfall(short)
+        setThumbs(pics)
       })
       .catch(() => {
         /* a failed re-check must not block checkout — the server still guards it */
@@ -391,7 +408,18 @@ export function Commande() {
                 shortfall[l.variantId] !== undefined ? 'border-rust bg-rust/5' : 'border-line'
               }`}
             >
-              <div className="h-[68px] w-14 flex-none rounded-[26px_26px_2px_2px] border border-cream-edge bg-glow" />
+              {/* The arch belongs to photographs, and this slot is one. It
+                  falls back to the empty arch while the catalogue loads, or if
+                  the product genuinely has no photo. */}
+              <div className="h-[68px] w-14 flex-none overflow-hidden rounded-[26px_26px_2px_2px] border border-cream-edge bg-glow">
+                {thumbs[l.variantId] && (
+                  <img
+                    src={thumbs[l.variantId]}
+                    alt={localized(l.productName, l.productNameAr, lang)}
+                    className="h-full w-full object-cover"
+                  />
+                )}
+              </div>
               <div className="flex-1">
                 <div className="text-sm font-semibold">
                   {localized(l.productName, l.productNameAr, lang)}

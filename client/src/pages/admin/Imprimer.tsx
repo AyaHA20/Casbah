@@ -42,6 +42,31 @@ export function AdminImprimer() {
   if (error) return <p className="p-8 text-rust">{error}</p>
   if (!order) return <p className="p-8 text-ink-soft">{t('common.loading')}</p>
 
+  /**
+   * Print only once every thumbnail has actually decoded.
+   *
+   * window.print() is synchronous: fired while a photo is still loading, that
+   * row prints blank — which is worse than having no photo column at all,
+   * because the picker would trust an empty box. Waits, but never blocks on a
+   * broken image.
+   */
+  async function printWhenReady() {
+    const imgs = Array.from(document.querySelectorAll<HTMLImageElement>('.sheet img'))
+    await Promise.all(
+      imgs.map((img) =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => {
+              // Resolve on error too: one dead URL must not stop the sheet
+              // printing, it just prints that row without a photo.
+              img.addEventListener('load', () => resolve(), { once: true })
+              img.addEventListener('error', () => resolve(), { once: true })
+            }),
+      ),
+    )
+    window.print()
+  }
+
   return (
     <>
       {/* Print geometry can't be expressed in utilities, and index.css is the
@@ -51,10 +76,18 @@ export function AdminImprimer() {
         @page { size: A4; margin: 14mm; }
         @media print {
           html, body { background: #fff !important; }
+          /* Browsers drop background graphics when printing. The thumbnail is
+             the point of the sheet for whoever picks the parcel, so force it. */
+          .sheet img {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          /* A row must not be split from its own photo across a page break. */
+          .sheet tr { break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
 
-      <div className="mx-auto max-w-[820px] p-gutter lg:p-10">
+      <div className="sheet mx-auto max-w-[820px] p-gutter lg:p-10">
         {/* Screen-only toolbar */}
         <div className="mb-8 flex items-center justify-between print:hidden">
           <Link to={`/admin/commandes?order=${order.id}`} className="text-meta text-green">
@@ -62,7 +95,7 @@ export function AdminImprimer() {
           </Link>
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={() => void printWhenReady()}
             className="rounded-pill border border-green bg-green px-6 py-3 text-sm font-semibold text-cream"
           >
             {t('print.print')}
@@ -118,6 +151,9 @@ export function AdminImprimer() {
           <table className="w-full border-collapse text-start">
             <thead>
               <tr className="border-b border-ink text-label font-semibold uppercase text-ink-soft">
+                {/* Deliberately unlabelled: a header over a 18mm photo column
+                    costs a word and tells the picker nothing. */}
+                <th className="w-[52px] py-2" aria-hidden />
                 <th className="py-2 font-semibold">{t('print.item')}</th>
                 <th className="py-2 font-semibold">{t('print.sizeColor')}</th>
                 <th className="py-2 text-center font-semibold">{t('print.qty')}</th>
@@ -127,6 +163,21 @@ export function AdminImprimer() {
             <tbody>
               {order.items.map((item) => (
                 <tr key={item.id} className="border-b border-line">
+                  <td className="py-3 pe-3 align-top">
+                    {/* Snapshot taken when the order was placed, so the picker
+                        sees what was actually sold even if the product has been
+                        re-shot since. The arch is reserved for photographs and
+                        this is one. */}
+                    <div className="h-[56px] w-[44px] overflow-hidden rounded-[16px_16px_2px_2px] border border-line">
+                      {item.imageUrl && (
+                        <img
+                          src={item.imageUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      )}
+                    </div>
+                  </td>
                   <td className="py-3 text-body">
                     {item.productName}
                     <div className="text-xs text-ink-soft"><Ltr>{item.sku}</Ltr></div>

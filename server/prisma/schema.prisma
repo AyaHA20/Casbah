@@ -281,6 +281,12 @@ model OrderItem {
   variantColor String
   sku          String
 
+  // The photo as it was when this line was sold, resolved for the chosen
+  // colour. Snapshotted for the same reason as the four columns above: joining
+  // back to the live product would show whatever photo is current, which is not
+  // what the customer bought. Nullable — the product may have had no photo.
+  imageUrl String?
+
   // Cascade: a line item is meaningless without its order. Deleting an order
   // takes its lines. (Prefer status = CANCELLED over deleting orders at all.)
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)

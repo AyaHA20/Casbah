@@ -94,11 +94,20 @@ export function OrderPanel({ order, loading, onStatusChange }: Props) {
 
       <div className="flex flex-col gap-[10px] border-t border-line pt-[18px] text-sm lg:text-[15px]">
         {order.items.map((item) => (
-          <div key={item.id} className="flex justify-between gap-4">
-            <span>
-              {item.productName} — {item.variantSize} / {item.variantColor}
-              {item.quantity > 1 && ` ×${item.quantity}`}
-            </span>
+          <div key={item.id} className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-2.5">
+              {/* Snapshot, not a live lookup: this is the photo the customer
+                  bought from, even if the product has been re-shot since. */}
+              <div className="h-12 w-10 flex-none overflow-hidden rounded-[18px_18px_2px_2px] border border-cream-edge bg-glow">
+                {item.imageUrl && (
+                  <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
+                )}
+              </div>
+              <span className="min-w-0">
+                {item.productName} — {item.variantSize} / {item.variantColor}
+                {item.quantity > 1 && ` ×${item.quantity}`}
+              </span>
+            </div>
             <span className="whitespace-nowrap">{fmtDA(item.unitPrice * item.quantity, lang)}</span>
           </div>
         ))}

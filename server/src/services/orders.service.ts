@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js'
+import { galleriesForProducts, resolveGallery } from './product-images.service.js'
 import { HttpError, badRequest, conflict, notFound } from '../lib/http-error.js'
 import type { CreateOrderBody } from '../schemas/order.schema.js'
 import { allocateOrderNumber } from './order-number.js'
@@ -11,6 +12,7 @@ type Line = {
   variantSize: string
   variantColor: string
   sku: string
+  imageUrl: string | null
 }
 
 export async function createOrder(input: CreateOrderBody) {
@@ -70,10 +72,17 @@ export async function createOrder(input: CreateOrderBody) {
       sku: true,
       stock: true,
       priceOverride: true,
-      product: { select: { name: true, basePrice: true, active: true } },
+      product: {
+        select: { id: true, name: true, basePrice: true, active: true, images: true },
+      },
     },
   })
   const byId = new Map(variants.map((v) => [v.id, v]))
+
+  // Read-only, and deliberately before the transaction: the photo lookup must
+  // not hold the stock rows open. Same fallback chain the storefront uses, so
+  // the snapshot is the picture the customer was actually looking at.
+  const galleries = await galleriesForProducts([...new Set(variants.map((v) => v.product.id))])
 
   const lines: Line[] = []
   const insufficient: Array<{ sku: string; requested: number; available: number }> = []
@@ -101,6 +110,16 @@ export async function createOrder(input: CreateOrderBody) {
       variantSize: variant.size,
       variantColor: variant.color,
       sku: variant.sku,
+      // Resolved for THIS variant's colour, then frozen. null when the product
+      // had no photo at all — the admin renders a placeholder for that.
+      imageUrl:
+        resolveGallery(
+          galleries.get(variant.product.id) ?? [],
+          // The legacy flat list is the third link in the chain; passing []
+          // would drop the photo for anything not yet re-shot per colour.
+          variant.product.images,
+          variant.color,
+        )[0] ?? null,
     })
   }
 
@@ -187,6 +206,7 @@ export async function createOrder(input: CreateOrderBody) {
               variantSize: l.variantSize,
               variantColor: l.variantColor,
               sku: l.sku,
+              imageUrl: l.imageUrl,
             })),
           },
         },

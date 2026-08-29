@@ -122,6 +122,7 @@ export async function getOrder(id: number) {
           productName: true,
           variantSize: true,
           variantColor: true,
+          imageUrl: true,
           sku: true,
         },
       },
