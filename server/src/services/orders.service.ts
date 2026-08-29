@@ -170,7 +170,7 @@ export async function createOrder(input: CreateOrderBody) {
           phone: input.phone,
           wilayaId: wilaya.id,
           communeId: commune.id,
-          address: input.address,
+          address: input.address ?? null,
           deliveryType: input.deliveryType,
           subtotal,
           shipping,

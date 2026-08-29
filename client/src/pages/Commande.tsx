@@ -6,8 +6,11 @@ import { useCart } from '../lib/cart'
 import { FetchError } from '../components/FetchError'
 import { FieldSkeleton } from '../components/Skeleton'
 import { Ltr, localized, useT } from '../lib/i18n'
+import type { Dict } from '../lib/dictionary'
 
 const PHONE_RE = /^0[5-7]\d{8}$/
+
+type TKey = keyof Dict
 
 export function Commande() {
   const { t, lang } = useT()
@@ -70,13 +73,42 @@ export function Commande() {
   const total = shipping === null ? null : subtotal + shipping
 
   const phoneOk = PHONE_RE.test(phone.replace(/\s/g, ''))
-  const ready =
-    lines.length > 0 &&
-    customerName.trim().length >= 3 &&
-    phoneOk &&
-    wilayaCode !== null &&
-    communeId !== null &&
-    address.trim().length >= 5
+
+  /**
+   * Every rule that blocks submission, named.
+   *
+   * This used to be one boolean, so a disabled button could not say which rule
+   * failed — and with two failing at once (a short name AND a short address)
+   * there was nothing on screen to fix. Address is deliberately absent: it is
+   * optional now, because the driver phones the customer.
+   */
+  const problems: Array<{ field: 'name' | 'phone' | 'wilaya' | 'commune' | 'cart'; key: TKey }> = [
+    ...(lines.length === 0
+      ? [{ field: 'cart' as const, key: 'checkout.errCart' as const }]
+      : []),
+    ...(customerName.trim().length < 3
+      ? [{ field: 'name' as const, key: 'checkout.errName' as const }]
+      : []),
+    ...(!phoneOk ? [{ field: 'phone' as const, key: 'checkout.errPhone' as const }] : []),
+    ...(wilayaCode === null
+      ? [{ field: 'wilaya' as const, key: 'checkout.errWilaya' as const }]
+      : []),
+    ...(communeId === null
+      ? [{ field: 'commune' as const, key: 'checkout.errCommune' as const }]
+      : []),
+  ]
+  const ready = problems.length === 0
+
+  // An inline message appears once the customer has left the field, or as soon
+  // as they press a disabled Confirmer — never while they are still typing the
+  // first three letters of their name.
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
+  const [attempted, setAttempted] = useState(false)
+  const errorFor = (field: string): string | null => {
+    if (!touched[field] && !attempted) return null
+    const p = problems.find((x) => x.field === field)
+    return p ? t(p.key) : null
+  }
 
   async function submit() {
     if (!ready || wilayaCode === null || communeId === null) return
@@ -88,7 +120,8 @@ export function Commande() {
         phone: phone.replace(/\s/g, ''),
         wilayaCode,
         communeId,
-        address: address.trim(),
+        // Empty box means "none given", not an empty address.
+        address: address.trim() || null,
         deliveryType,
         notes: notes.trim() || null,
         items: lines.map((l) => ({ variantId: l.variantId, quantity: l.quantity })),
@@ -210,6 +243,8 @@ export function Commande() {
 
   const fieldCls =
     'rounded-[12px] border border-line bg-field p-field text-body outline-none focus:border-green'
+  const fieldErrCls =
+    'rounded-[12px] border border-rust bg-field p-field text-body outline-none focus:border-rust'
   const labelCls = 'text-meta text-ink-soft'
 
   const recap = (
@@ -242,12 +277,33 @@ export function Commande() {
         <p className="rounded-md border border-rust/40 bg-rust/5 p-3 text-xs text-rust">{error}</p>
       )}
 
+      {/* The reason the button is dead, next to the button. Without this a
+          customer with two invalid fields sees nothing at all and leaves. */}
+      {!ready && (
+        <p className="text-xs text-rust">
+          {t('checkout.blocked')} {problems.map((p) => t(p.key)).join(' · ')}
+        </p>
+      )}
+
       <div className="flex items-center gap-[10px]">
         <button
           type="button"
-          onClick={submit}
-          disabled={!ready || submitting || hasShortfall}
-          className="flex-1 rounded-pill border border-green bg-green py-4 text-center text-[15px] font-semibold text-cream disabled:cursor-not-allowed disabled:border-line disabled:bg-line disabled:text-white lg:py-[18px] lg:text-base"
+          onClick={() => {
+            // Pressing a disabled button does nothing, so the wrapper catches
+            // the intent and reveals every message at once.
+            setAttempted(true)
+            void submit()
+          }}
+          aria-disabled={!ready || submitting || hasShortfall}
+          // Not `disabled`: a disabled button swallows the click, and the click
+          // is what reveals the messages. It is styled dead and refuses in
+          // submit() instead.
+          disabled={submitting || hasShortfall}
+          className={`flex-1 rounded-pill border py-4 text-center text-[15px] font-semibold lg:py-[18px] lg:text-base ${
+            ready && !submitting && !hasShortfall
+              ? 'border-green bg-green text-cream'
+              : 'cursor-not-allowed border-line bg-line text-white'
+          }`}
         >
           {submitting ? t('common.loading') : t('checkout.confirm')}
         </button>
@@ -329,25 +385,28 @@ export function Commande() {
           <label className="flex flex-col gap-1.5">
             <span className={labelCls}>{t('checkout.name')}</span>
             <input
-              className={fieldCls}
+              className={errorFor('name') ? fieldErrCls : fieldCls}
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
+              onBlur={() => setTouched((s) => ({ ...s, name: true }))}
+              aria-invalid={errorFor('name') !== null}
               placeholder={t('ph.customerName')}
             />
+            {errorFor('name') && <span className="text-xs text-rust">{errorFor('name')}</span>}
           </label>
           <label className="flex flex-col gap-1.5">
             <span className={labelCls}>{t('checkout.phone')}</span>
             <input
-              className={fieldCls}
+              className={errorFor('phone') ? fieldErrCls : fieldCls}
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              onBlur={() => setTouched((s) => ({ ...s, phone: true }))}
+              aria-invalid={errorFor('phone') !== null}
               placeholder="0561 88 12 04"
               inputMode="tel"
             />
-            <span className={`text-xs ${phone && !phoneOk ? 'text-rust' : 'text-ink-soft'}`}>
-              {phone && !phoneOk
-                ? t('checkout.phoneFormat')
-                : t('checkout.phoneHint')}
+            <span className={`text-xs ${errorFor('phone') ? 'text-rust' : 'text-ink-soft'}`}>
+              {errorFor('phone') ?? t('checkout.phoneHint')}
             </span>
           </label>
           {geoError !== null && (
@@ -370,10 +429,15 @@ export function Commande() {
           <label className={`flex flex-col gap-1.5 ${geoLoading || geoError !== null ? 'hidden' : ''}`}>
             <span className={labelCls}>{t('checkout.wilaya')}</span>
             <select
-              className={`${fieldCls} appearance-none`}
+              className={`${errorFor('wilaya') ? fieldErrCls : fieldCls} appearance-none`}
               value={wilayaCode ?? ''}
-              onChange={(e) => setWilayaCode(Number(e.target.value))}
+              onChange={(e) => setWilayaCode(e.target.value ? Number(e.target.value) : null)}
+              onBlur={() => setTouched((s) => ({ ...s, wilaya: true }))}
+              aria-invalid={errorFor('wilaya') !== null}
             >
+              {/* Without this the first wilaya looks selected while the state is
+                  still null — the button then sits dead for no visible reason. */}
+              <option value="">{t('checkout.chooseWilaya')}</option>
               {wilayas.map((w) => (
                 <option key={w.code} value={w.code}>
                   {w.code} — {lang === 'ar' ? w.nameAr : w.nameFr}
@@ -384,17 +448,23 @@ export function Commande() {
           <label className={`flex flex-col gap-1.5 ${geoLoading || geoError !== null ? 'hidden' : ''}`}>
             <span className={labelCls}>{t('checkout.commune')}</span>
             <select
-              className={`${fieldCls} appearance-none`}
+              className={`${errorFor('commune') ? fieldErrCls : fieldCls} appearance-none`}
               value={communeId ?? ''}
               onChange={(e) => setCommuneId(Number(e.target.value))}
+              onBlur={() => setTouched((s) => ({ ...s, commune: true }))}
+              aria-invalid={errorFor('commune') !== null}
               disabled={communes.length === 0}
             >
+              <option value="">{t('checkout.chooseCommune')}</option>
               {communes.map((c) => (
                 <option key={c.id} value={c.id}>
                   {localized(c.name, c.nameAr, lang)}
                 </option>
               ))}
             </select>
+            {errorFor('commune') && (
+              <span className="text-xs text-rust">{errorFor('commune')}</span>
+            )}
           </label>
         </div>
 
@@ -434,7 +504,12 @@ export function Commande() {
         </div>
 
         <label className="flex max-w-[640px] flex-col gap-1.5">
-          <span className={labelCls}>{t('checkout.address')}</span>
+          <span className={labelCls}>
+            {t('checkout.address')} {t('common.optional')}
+          </span>
+          {/* Not a nicety: an address is often not how a delivery happens here,
+              and requiring one was turning real orders away. */}
+          <span className="text-xs text-ink-soft">{t('checkout.addressHint')}</span>
           <textarea
             className={`${fieldCls} min-h-[76px] resize-y`}
             value={address}

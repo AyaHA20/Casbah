@@ -292,7 +292,8 @@ export type AdminOrderDetail = {
   orderNumber: string
   customerName: string
   phone: string
-  address: string
+  /** Null when the customer gave none — show "call the customer", not a blank. */
+  address: string | null
   deliveryType: 'DESK' | 'HOME'
   subtotal: number
   shipping: number
@@ -687,7 +688,8 @@ export const api = {
     phone: string
     wilayaCode: number
     communeId: number
-    address: string
+    /** Optional: the driver phones the customer. `phone` is the real locator. */
+    address?: string | null
     deliveryType: 'DESK' | 'HOME'
     notes?: string | null
     items: Array<{ variantId: number; quantity: number }>

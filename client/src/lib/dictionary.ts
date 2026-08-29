@@ -113,6 +113,16 @@ export const fr = {
   'checkout.summary': 'Récapitulatif',
   'checkout.subtotal': 'Sous-total',
   'checkout.shipping': 'Livraison',
+  // Validation messages. The button used to sit dead with no explanation at
+  // all, which is the one failure mode that just loses the sale.
+  'checkout.blocked': 'Il reste à corriger :',
+  'checkout.errCart': 'votre panier est vide',
+  'checkout.errName': 'le nom doit faire au moins 3 caractères',
+  'checkout.errPhone': 'le numéro doit être au format 0X XX XX XX XX (05, 06 ou 07)',
+  'checkout.errWilaya': 'choisissez une wilaya',
+  'checkout.errCommune': 'choisissez une commune',
+  'checkout.addressHint': 'Le livreur vous appellera pour vous localiser.',
+  'orders.noAddress': 'Aucune adresse — appeler le client',
   'checkout.total': 'Total à payer',
   'checkout.codNotice': 'Vous payez en espèces à la réception. Aucun paiement en ligne, jamais.',
   'checkout.confirm': 'Confirmer la commande',

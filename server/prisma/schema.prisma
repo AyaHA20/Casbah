@@ -233,7 +233,9 @@ model Order {
   phone        String
   wilayaId     Int
   communeId    Int
-  address      String
+  // Optional: the driver phones the customer and finds them that way, which
+  // is how COD actually works here. `phone` is the real locator, not this.
+  address      String?
   deliveryType DeliveryType
   subtotal     Int
   shipping     Int

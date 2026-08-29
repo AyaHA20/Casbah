@@ -101,7 +101,11 @@ export function AdminImprimer() {
             <div className="text-body">
               {t(DELIVERY_KEY[order.deliveryType])}
             </div>
-            <div className="text-body">{order.address}</div>
+            {/* Printed too: the driver holding the sheet is the person who
+                has to know to phone rather than look for a street. */}
+            <div className={order.address ? 'text-body' : 'text-body font-semibold'}>
+              {order.address ?? t('orders.noAddress')}
+            </div>
             <div className="text-body font-medium">
               {order.commune.name} — {order.wilaya.code}{' '}
               {lang === 'ar' ? order.wilaya.nameAr : order.wilaya.nameFr}

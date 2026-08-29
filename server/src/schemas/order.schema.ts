@@ -20,7 +20,13 @@ export const CreateOrderBody = z.object({
     .regex(PHONE_RE, 'Numéro invalide. Format attendu : 0X XX XX XX XX (05, 06 ou 07).'),
   wilayaCode: z.number().int().min(1, 'Wilaya invalide.').max(69, 'Wilaya invalide.'),
   communeId: z.number().int().positive('Commune invalide.'),
-  address: z.string().trim().min(5, 'Adresse trop courte.').max(300),
+  // Optional, and an empty box means "none given" rather than "". There is no
+  // minimum length: a half-typed landmark is still more use to a driver than
+  // nothing, and rejecting it only cost us the order.
+  address: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().trim().max(300).nullish(),
+  ),
   deliveryType: z.enum(['DESK', 'HOME']),
   notes: z.string().trim().max(500).nullish(),
   items: z

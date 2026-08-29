@@ -83,7 +83,11 @@ export function OrderPanel({ order, loading, onStatusChange }: Props) {
         />
         <div className="flex justify-between gap-6">
           <dt className="flex-none text-ink-soft">{t('orders.address')}</dt>
-          <dd className="text-end">{order.address}</dd>
+          <dd className="text-end">
+            {order.address ?? (
+              <span className="font-medium text-rust">{t('orders.noAddress')}</span>
+            )}
+          </dd>
         </div>
         {order.notes && <Row label={t('orders.note')} value={order.notes} />}
       </dl>
